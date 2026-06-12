@@ -1,0 +1,22 @@
+# Hiss-Linux — headless OpenHoldem engine + HTTP decision service.
+# Install: cp deploy/hiss.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now hiss
+[Unit]
+Description=Hiss-Linux poker engine (HTTP decision service)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/var/www/hiss-linux/build/hiss 8087
+Restart=on-failure
+RestartSec=3
+WorkingDirectory=/var/www/hiss-linux
+# Decisions only; no table actuation. Lock it down.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/www/hiss-linux/logs
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

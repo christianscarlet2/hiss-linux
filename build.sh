@@ -9,8 +9,8 @@
 set -e
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 OBJ="$ROOT/build/obj"
-CXX="g++ -std=c++17 -fpermissive -w"
-CC="gcc -std=c11 -w -O2"
+CXX="g++ -std=c++17 -fpermissive -w -DNDEBUG -O1"
+CC="gcc -std=c11 -w -O2 -DNDEBUG"
 INC="-I $ROOT/compat -I $ROOT/engine/oh"
 JOBS="${JOBS:-6}"
 mkdir -p "$OBJ"
@@ -33,9 +33,13 @@ if [ -s "$OBJ/_fail.list" ]; then echo "ABORT: compile failures:"; cat "$OBJ/_fa
 echo "[2b] WinHTTP-on-libcurl bridge (the API client transport)"
 $CXX -c -I "$ROOT/compat" "$ROOT/compat/winhttp_curl.cpp" -o "$OBJ/winhttp_curl.o"
 
+echo "[2c] daemon entrypoint (engine boot + HTTP decision service)"
+# engine side (MFC shim) and socket side (pure POSIX) are separate TUs so the
+# shim and system networking headers never collide.
+$CXX -include stdafx.h -c $INC "$ROOT/src/engined.cpp" -o "$OBJ/engined.o"
+$CXX -c "$ROOT/src/server.cpp" -o "$OBJ/server.o"
+
 echo "[3/3] link -> hiss"
-printf 'int main(){return 0;}\n' > "$OBJ/_main.cpp"
-$CXX -c "$OBJ/_main.cpp" -o "$OBJ/_main.o"
 $CXX -o "$ROOT/build/hiss" "$OBJ"/*.o "$OBJ/libpokereval.a" -lpthread -lm -lcurl
 
 echo "OK -> $ROOT/build/hiss"
