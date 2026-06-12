@@ -1,0 +1,18 @@
+#ifndef HISS_STUB_LIBPQ
+#define HISS_STUB_LIBPQ
+typedef struct pg_conn PGconn;
+typedef struct pg_result PGresult;
+typedef enum { CONNECTION_OK, CONNECTION_BAD } ConnStatusType;
+typedef enum { PGRES_EMPTY_QUERY, PGRES_COMMAND_OK, PGRES_TUPLES_OK, PGRES_FATAL_ERROR } ExecStatusType;
+inline PGconn* PQconnectdb(const char*) { return nullptr; }
+inline void PQfinish(PGconn*) {}
+inline ConnStatusType PQstatus(const PGconn*) { return CONNECTION_BAD; }
+inline PGresult* PQexec(PGconn*, const char*) { return nullptr; }
+inline ExecStatusType PQresultStatus(const PGresult*) { return PGRES_FATAL_ERROR; }
+inline int PQntuples(const PGresult*) { return 0; }
+inline int PQnfields(const PGresult*) { return 0; }
+inline char* PQgetvalue(const PGresult*, int, int) { return (char*)""; }
+inline void PQclear(PGresult*) {}
+inline char* PQerrorMessage(const PGconn*) { return (char*)""; }
+inline char* PQfname(const PGresult*, int) { return (char*)""; }
+#endif
