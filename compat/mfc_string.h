@@ -31,18 +31,23 @@ typedef char* LPSTR;
 
 class CString {
  public:
-  CString() {}
-  CString(const char* s) : s_(s ? s : "") {}
-  CString(const std::string& s) : s_(s) {}
-  explicit CString(char c, int n = 1) : s_(n, c) {}
-  CString(const CString& o) : s_(o.s_) {}
+  // _c is the FIRST member and always points at s_'s data. MFC's CString is a
+  // thin char* wrapper, so the engine freely passes CString objects to printf
+  // %s (CParseErrors::Error, write_log, …). std::string isn't layout-compatible
+  // with that, so we mirror the MFC trick: reading the object as a char* yields
+  // _c. Every mutation calls _u() to re-point it (c_str() can reallocate).
+  CString() { _u(); }
+  CString(const char* s) : s_(s ? s : "") { _u(); }
+  CString(const std::string& s) : s_(s) { _u(); }
+  explicit CString(char c, int n = 1) : s_(n, c) { _u(); }
+  CString(const CString& o) : s_(o.s_) { _u(); }
 
-  CString& operator=(const CString& o) { s_ = o.s_; return *this; }
-  CString& operator=(const char* s) { s_ = s ? s : ""; return *this; }
-  CString& operator=(char c) { s_ = std::string(1, c); return *this; }
-  CString& operator=(int v) { if (v == 0) s_.clear(); else s_ = std::string(1, (char)v); return *this; }  // handles `= NULL`
-  CString& operator=(long v) { if (v == 0) s_.clear(); return *this; }
-  CString& operator=(std::nullptr_t) { s_.clear(); return *this; }
+  CString& operator=(const CString& o) { s_ = o.s_; return _u(); }
+  CString& operator=(const char* s) { s_ = s ? s : ""; return _u(); }
+  CString& operator=(char c) { s_ = std::string(1, c); return _u(); }
+  CString& operator=(int v) { if (v == 0) s_.clear(); else s_ = std::string(1, (char)v); return _u(); }  // handles `= NULL`
+  CString& operator=(long v) { if (v == 0) s_.clear(); return _u(); }
+  CString& operator=(std::nullptr_t) { s_.clear(); return _u(); }
 
   // implicit conversions used throughout the engine
   operator const char*() const { return s_.c_str(); }
@@ -50,7 +55,7 @@ class CString {
 
   int GetLength() const { return (int)s_.size(); }
   bool IsEmpty() const { return s_.empty(); }
-  void Empty() { s_.clear(); }
+  void Empty() { s_.clear(); _u(); }
 
   char GetAt(int i) const { return (i >= 0 && i < (int)s_.size()) ? s_[i] : 0; }
   char operator[](int i) const { return GetAt(i); }
@@ -61,14 +66,14 @@ class CString {
     char buf[4096];
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
-    s_ = buf;
+    s_ = buf; _u();
   }
   void AppendFormat(const char* fmt, ...) {
     va_list ap; va_start(ap, fmt);
     char buf[4096];
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
-    s_ += buf;
+    s_ += buf; _u();
   }
 
   // search
@@ -108,43 +113,43 @@ class CString {
   }
 
   // case + trim — MFC returns CString& (mutate in place, allow chaining/assignment)
-  CString& MakeLower() { for (auto& c : s_) c = (char)tolower((unsigned char)c); return *this; }
-  CString& MakeUpper() { for (auto& c : s_) c = (char)toupper((unsigned char)c); return *this; }
-  CString& Trim() { TrimLeft(); TrimRight(); return *this; }
-  CString& TrimLeft() { size_t p = s_.find_first_not_of(" \t\r\n"); s_ = (p == std::string::npos) ? "" : s_.substr(p); return *this; }
-  CString& TrimRight() { size_t p = s_.find_last_not_of(" \t\r\n"); s_ = (p == std::string::npos) ? "" : s_.substr(0, p + 1); return *this; }
-  CString& TrimLeft(const char* set) { size_t p = s_.find_first_not_of(set); s_ = (p == std::string::npos) ? "" : s_.substr(p); return *this; }
-  CString& TrimRight(const char* set) { size_t p = s_.find_last_not_of(set); s_ = (p == std::string::npos) ? "" : s_.substr(0, p + 1); return *this; }
+  CString& MakeLower() { for (auto& c : s_) c = (char)tolower((unsigned char)c); return _u(); }
+  CString& MakeUpper() { for (auto& c : s_) c = (char)toupper((unsigned char)c); return _u(); }
+  CString& Trim() { TrimLeft(); TrimRight(); return _u(); }
+  CString& TrimLeft() { size_t p = s_.find_first_not_of(" \t\r\n"); s_ = (p == std::string::npos) ? "" : s_.substr(p); return _u(); }
+  CString& TrimRight() { size_t p = s_.find_last_not_of(" \t\r\n"); s_ = (p == std::string::npos) ? "" : s_.substr(0, p + 1); return _u(); }
+  CString& TrimLeft(const char* set) { size_t p = s_.find_first_not_of(set); s_ = (p == std::string::npos) ? "" : s_.substr(p); return _u(); }
+  CString& TrimRight(const char* set) { size_t p = s_.find_last_not_of(set); s_ = (p == std::string::npos) ? "" : s_.substr(0, p + 1); return _u(); }
   CString& TrimLeft(char c) { char set[2] = {c, 0}; return TrimLeft(set); }
   CString& TrimRight(char c) { char set[2] = {c, 0}; return TrimRight(set); }
   // Remove all occurrences of a char; returns count removed (MFC semantics)
-  int Remove(char c) { int n = 0; std::string o; for (char ch : s_) { if (ch == c) n++; else o += ch; } s_ = o; return n; }
-  void Truncate(int n) { if (n >= 0 && n < (int)s_.size()) s_.resize(n); }
-  void Append(const char* p) { if (p) s_ += p; }
-  void Append(const CString& o) { s_ += o.s_; }
-  void AppendChar(char c) { s_ += c; }
+  int Remove(char c) { int n = 0; std::string o; for (char ch : s_) { if (ch == c) n++; else o += ch; } s_ = o; _u(); return n; }
+  void Truncate(int n) { if (n >= 0 && n < (int)s_.size()) s_.resize(n); _u(); }
+  void Append(const char* p) { if (p) s_ += p; _u(); }
+  void Append(const CString& o) { s_ += o.s_; _u(); }
+  void AppendChar(char c) { s_ += c; _u(); }
 
   int Replace(const char* from, const char* to) {
     int n = 0; size_t p = 0; size_t flen = strlen(from);
     if (flen == 0) return 0;
     while ((p = s_.find(from, p)) != std::string::npos) { s_.replace(p, flen, to); p += strlen(to); n++; }
-    return n;
+    _u(); return n;
   }
   int Replace(char from, char to) {
-    int n = 0; for (auto& c : s_) if (c == from) { c = to; n++; } return n;
+    int n = 0; for (auto& c : s_) if (c == from) { c = to; n++; } _u(); return n;
   }
-  void Insert(int i, const char* sub) { if (i < 0) i = 0; if (i > (int)s_.size()) i = (int)s_.size(); s_.insert(i, sub); }
-  void Insert(int i, char c) { if (i < 0) i = 0; if (i > (int)s_.size()) i = (int)s_.size(); s_.insert(i, 1, c); }
-  int Delete(int i, int n = 1) { if (i < 0 || i >= (int)s_.size()) return (int)s_.size(); s_.erase(i, n); return (int)s_.size(); }
+  void Insert(int i, const char* sub) { if (i < 0) i = 0; if (i > (int)s_.size()) i = (int)s_.size(); s_.insert(i, sub); _u(); }
+  void Insert(int i, char c) { if (i < 0) i = 0; if (i > (int)s_.size()) i = (int)s_.size(); s_.insert(i, 1, c); _u(); }
+  int Delete(int i, int n = 1) { if (i < 0 || i >= (int)s_.size()) return (int)s_.size(); s_.erase(i, n); _u(); return (int)s_.size(); }
 
   // comparison
   int Compare(const char* o) const { return strcmp(s_.c_str(), o); }
   int CompareNoCase(const char* o) const { return strcasecmp(s_.c_str(), o); }
 
   // buffer access (engine pokes raw buffers occasionally)
-  char* GetBuffer(int minlen = 0) { if ((int)s_.size() < minlen) s_.resize(minlen); return &s_[0]; }
-  void ReleaseBuffer(int newlen = -1) { if (newlen >= 0) s_.resize(newlen); else s_.resize(strlen(s_.c_str())); }
-  void SetAt(int i, char c) { if (i >= 0 && i < (int)s_.size()) s_[i] = c; }
+  char* GetBuffer(int minlen = 0) { if ((int)s_.size() < minlen) s_.resize(minlen); _u(); return &s_[0]; }
+  void ReleaseBuffer(int newlen = -1) { if (newlen >= 0) s_.resize(newlen); else s_.resize(strlen(s_.c_str())); _u(); }
+  void SetAt(int i, char c) { if (i >= 0 && i < (int)s_.size()) s_[i] = c; _u(); }
 
   // tokenize (MFC-style)
   CString Tokenize(const char* delims, int& pos) const {
@@ -158,9 +163,9 @@ class CString {
   }
 
   // operators
-  CString& operator+=(const CString& o) { s_ += o.s_; return *this; }
-  CString& operator+=(const char* o) { s_ += o; return *this; }
-  CString& operator+=(char c) { s_ += c; return *this; }
+  CString& operator+=(const CString& o) { s_ += o.s_; return _u(); }
+  CString& operator+=(const char* o) { s_ += o; return _u(); }
+  CString& operator+=(char c) { s_ += c; return _u(); }
 
   friend CString operator+(const CString& a, const CString& b) { return CString(a.s_ + b.s_); }
   friend CString operator+(const CString& a, const char* b) { return CString(a.s_ + b); }
@@ -176,7 +181,9 @@ class CString {
   const std::string& str() const { return s_; }
 
  private:
+  const char* _c = "";   // MUST be first: passing CString to %s/varargs reads this as the char*
   std::string s_;
+  CString& _u() { _c = s_.c_str(); return *this; }  // re-point after any mutation
 };
 
 typedef CString CStringA;

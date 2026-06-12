@@ -147,3 +147,33 @@ passing **CString objects to `%s`**. MFC's CString is a thin char* wrapper
 `compat/mfc_string.h` CString varargs-/`%s`-compatible — e.g. give it a leading
 `const char*` member kept pointing at the data (MFC-style), or have Format route
 through a CString-aware formatter. Then formulas parse and produce fold/call/raise.
+
+
+## ✅ WORKING DECISION ENGINE — real hand-strength decisions
+The headless engine now makes **real, deterministic poker decisions** out of the
+box. `POST /decide` with table state -> the full pipeline runs (populate
+CTableState -> EvaluateAll -> poker-eval handrank -> formula -> autoplayer action):
+
+    AsAh -> raise   QhQd -> raise   AhKs -> raise        (strong: handrank169 <= 40)
+    Ts9h -> call                                          (medium: 40 < hr <= 90)
+    72o  -> fold                                          (weak:   hr > 90)
+    AsKs/Qd7c2s -> raise (flop, betround=2)               (board updates the street)
+
+Stable across 20+ requests; my-turn is default ON (a /decide call IS our turn;
+HISS_NOMYTURN=1 to disable).
+
+### The two bugs that unlocked it
+1. `CSymbolEngineHandrank` indexed `handrank_table_169[nopponents-1]` with
+   nopponents=0 (no iterator thread headless) -> OOB read -> flaky handrank.
+   Clamped nopponents to [1, max].
+2. **The real blocker**: `CTokenizer::SetInputBuffer` did `input_buffer =
+   (char*)formula_text` — aliasing a TEMPORARY `CString::c_str()`. MFC's
+   ref-counted COW CString kept that buffer alive; the std::string-backed shim
+   copy dangled, so the tokenizer parsed FREED MEMORY -> garbage tokens -> no
+   parse tree -> every f$ function evaluated to 0. Fixed by having the tokenizer
+   OWN a std::string copy of the input. (Also gave compat CString a leading
+   char* for MFC-style %s, though g++'s by-reference varargs passing limits that.)
+
+The engine is a complete headless OpenHoldem decision service: boots, ingests
+table state over HTTP (or the live API via the libcurl bridge), and returns
+fold/check/call/raise/betsize.

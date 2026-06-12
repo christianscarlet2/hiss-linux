@@ -30,6 +30,9 @@ int line_relative = 1;
 const int kMaxSizeOfToken = 1024;
 char last_token_string[kMaxSizeOfToken];
 char* input_buffer = NULL;
+static std::string g_tokenizer_input_storage;  // owns a copy of the formula text:
+// SetInputBuffer was aliasing a temporary CString::c_str() (MFC COW kept it alive;
+// the std::string-backed shim copy dangles), so the tokenizer read freed memory.
 int  _token_start_pointer = kUndefined;
 const char kEmptyBuffer[2] = "\n";
 COHScriptObject* _currently_tokenized_function_or_list = NULL;
@@ -71,7 +74,8 @@ void CTokenizer::SetInputBufferByDebugTab(const char* expression_to_be_parsed, i
 }
 
 void CTokenizer::SetInputBuffer(const char* next_formula_to_be_parsed) {
-  input_buffer = (char*)next_formula_to_be_parsed;
+  g_tokenizer_input_storage = next_formula_to_be_parsed ? next_formula_to_be_parsed : "";
+  input_buffer = &g_tokenizer_input_storage[0];
   InitVars();
 }
 

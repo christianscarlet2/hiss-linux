@@ -12,6 +12,8 @@
 #include "CFunctionCollection.h"
 #include "COpenHoldemStatusbar.h"
 #include "globals.h"
+#include "CFunctionCollection.h"
+#include "COHScriptObject.h"
 #include "MagicNumbers.h"
 #include "CardFunctions.h"
 #include "CTableState.h"
@@ -139,7 +141,7 @@ extern "C" const char* hiss_decide(const char* body_c) {
   std::string body = body_c ? body_c : "";
   if (!body.empty() && body.find('{') != std::string::npos) {
     g_table_state_ready = PopulateTableState(body);
-    g_hiss_force_my_turn = g_table_state_ready && getenv("HISS_MYTURN");  // heavy prwin/handrank path; opt-in
+    g_hiss_force_my_turn = g_table_state_ready && !getenv("HISS_NOMYTURN");  // a /decide call IS our turn
   }
   // EvaluateAll() over EMPTY table state dereferences scraper-populated data
   // (e.g. nopponents-1 indexing) — so only run it once the bridge has filled
