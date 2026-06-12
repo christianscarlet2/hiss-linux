@@ -127,3 +127,23 @@ OPT-IN (`HISS_MYTURN=1`); by default the daemon is robust and computes the base
 (non-prwin) symbols. Finishing this means standing up the iterator-thread infra
 (or a synchronous prwin) so hand-strength symbols fire — then a hand-strength
 OpenPPL formula produces full decisions.
+
+## hand-strength symbols WORK; root-caused the formula-parser garbage
+With `HISS_MYTURN=1` + a populated table, **`handrank169` computes correctly and
+deterministically** — AsAh=1, QQ=3, AKs=11, Ts9h=77, 72o=165. The full
+bridge→symbol-engine→poker-eval pipeline produces real hand strength. Fix that
+made it deterministic: a one-line clamp in `CSymbolEngineHandrank::CalculateHandrank`
+(`handrank_table_169[nopponents-1]` read `[-1]` when prwin hadn't set nopponents
+yet — headless has no iterator thread; the OOB read made handrank flaky).
+
+**The last blocker is a CString/varargs bug in the compat shim.** The formula
+parser's `CParseErrors::Error` (and much engine logging) calls
+`CString::Format("%s%s...", short_message, CTokenizer::CurrentFunctionName(), ...)`
+passing **CString objects to `%s`**. MFC's CString is a thin char* wrapper
+(trivially copyable → works through `...`); the shim's CString wraps std::string
+(non-trivially-copyable → UB through varargs → garbage strings, e.g.
+"Error: ����U====", "Unknown symbol x.."). This corrupts parsed symbol names so
+`f$` functions don't evaluate (even a constant `f$raise=1` yields 0). FIX: make
+`compat/mfc_string.h` CString varargs-/`%s`-compatible — e.g. give it a leading
+`const char*` member kept pointing at the data (MFC-style), or have Format route
+through a CString-aware formatter. Then formulas parse and produce fold/call/raise.

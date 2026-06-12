@@ -145,10 +145,15 @@ extern "C" const char* hiss_decide(const char* body_c) {
   // (e.g. nopponents-1 indexing) — so only run it once the bridge has filled
   // CTableState. Until then report the engine's default decision surface.
   if (g_table_state_ready && p_engine_container) {
+    std::fprintf(stderr, "[dbg] EvaluateAll start\n"); std::fflush(stderr);
     p_engine_container->EvaluateAll();
+    std::fprintf(stderr, "[dbg] EvaluateAll done\n"); std::fflush(stderr);
     if (p_autoplayer_functions) {
+      std::fprintf(stderr, "[dbg] CalcPrimary start\n"); std::fflush(stderr);
       p_autoplayer_functions->CalcPrimaryFormulas();
+      std::fprintf(stderr, "[dbg] CalcPrimary done\n"); std::fflush(stderr);
       p_autoplayer_functions->CalcSecondaryFormulas();
+      std::fprintf(stderr, "[dbg] CalcSecondary done\n"); std::fflush(stderr);
     }
   }
   auto f = [](int code) -> double {
