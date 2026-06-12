@@ -1,0 +1,18 @@
+[Unit]
+Description=Hiss — Scarlet Beast poker bot (Linux daemon)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/hiss/hiss.conf
+ExecStart=/usr/local/bin/hiss /etc/hiss/hiss.conf
+Restart=on-failure
+RestartSec=5
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

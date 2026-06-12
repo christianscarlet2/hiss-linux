@@ -1,0 +1,10 @@
+# Hiss-Linux configuration. Copy to /etc/hiss/hiss.conf and fill in.
+HISS_BASE=https://poker.scarletbeast.com
+# Machine key from your Vault (/wallet -> "Machine Key"):
+HISS_TOKEN=sbp_replace_me
+HISS_TABLE=1
+HISS_BUYIN=5000
+HISS_HANDLE=
+HISS_POLL=1500
+# Set to 1 to observe + decide but never act:
+HISS_DRYRUN=1
