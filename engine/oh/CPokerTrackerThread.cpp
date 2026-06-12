@@ -512,6 +512,10 @@ double UpdateStat(int m_chr, int stat)
 	double		result = kUndefined;
 	clock_t		updStart, updEnd;
 	int			  duration;
+	// nb_hands / time_period: PT-query inputs (PokerTracker DB is inert in this
+	// port — the API feed supplies table state instead), default to 0.
+	int			  nb_hands = 0;
+	int			  time_period = 0;
 
 	int sym_elapsed = p_engine_container->symbol_engine_time()->elapsed();
 

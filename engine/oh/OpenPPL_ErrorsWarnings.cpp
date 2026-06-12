@@ -67,7 +67,7 @@ void OpenPPL_Warning(CString message)
 {
 	CString complete_message;
 	complete_message.Format("[OpenPPL] Warning: %s\n", message);
-	write_log(preferences.debug_symbolengine_open_ppl(), 
+	write_log(Preferences()->debug_symbolengine_open_ppl(), 
 		(char*)&complete_message);
 }
 

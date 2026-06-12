@@ -10,7 +10,6 @@
 
 CWinApp theApp;
 
-using namespace std;
 
 double calc_pokerval(HandVal hv, int n);
 void do_calc(CardMask cplCards, CardMask oppCards, CardMask comCards);

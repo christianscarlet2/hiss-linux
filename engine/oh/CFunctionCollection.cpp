@@ -376,7 +376,7 @@ void CFunctionCollection::SetAutoplayerFunctionValue(int function_code, double v
   p_function->SetValue(value);
 }
 
-void CFunctionCollection::CreateEmptyDefaultFunctionIfFunctionDoesNotExist(CString &function_name) {
+void CFunctionCollection::CreateEmptyDefaultFunctionIfFunctionDoesNotExist(const CString &function_name) {
   if (Exists(function_name)) {
     write_log(Preferences()->debug_formula(), 
       "[CFunctionCollection] Function already exists : %s\n", function_name);

@@ -62,7 +62,7 @@ void CSymbolEngineFormulaLoading::ChangeProfileOnLoadCommand() {
   if (pDoc == NULL) {
     return;
   }
-  (COpenHoldemDoc*)pDoc->
+  // Clear the pending profile (original cast-to-COpenHoldemDoc* was dead code).
   _profile_to_be_loaded = "";
 }
 

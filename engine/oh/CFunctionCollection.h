@@ -95,7 +95,7 @@ class CFunctionCollection: public CVirtualSymbolEngine {
   // instead of f$beep, f$alli, ...
   void SetAutoplayerFunctionValue(int function_code, double value);
  private:
-  void CreateEmptyDefaultFunctionIfFunctionDoesNotExist(CString &function_name);
+  void CreateEmptyDefaultFunctionIfFunctionDoesNotExist(const CString &function_name);
   CString GetSimilarNameWithDifferentCases(CString function_name);
   bool CheckForOutdatedFunction(CString name);
   bool CheckForMisspelledOpenPPLMainFunction(CString name);

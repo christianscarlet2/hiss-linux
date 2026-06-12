@@ -23,6 +23,7 @@
 
 using namespace cv;
 using namespace tesseract;
+using namespace std;
 
 struct SAutoOcrSettings {
 	int threshold;

@@ -1,3 +1,4 @@
-#ifndef HISS_STUB3
-#define HISS_STUB3
+#ifndef HISS_MOUSEDLL_H
+#define HISS_MOUSEDLL_H
+#include "mfc_compat.h"
 #endif

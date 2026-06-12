@@ -34,7 +34,7 @@ class CString {
   CString() {}
   CString(const char* s) : s_(s ? s : "") {}
   CString(const std::string& s) : s_(s) {}
-  CString(char c, int n = 1) : s_(n, c) {}
+  explicit CString(char c, int n = 1) : s_(n, c) {}
   CString(const CString& o) : s_(o.s_) {}
 
   CString& operator=(const CString& o) { s_ = o.s_; return *this; }
@@ -104,14 +104,22 @@ class CString {
     return CString(s_.substr(s_.size() - n));
   }
 
-  // case + trim
-  void MakeLower() { for (auto& c : s_) c = (char)tolower((unsigned char)c); }
-  void MakeUpper() { for (auto& c : s_) c = (char)toupper((unsigned char)c); }
-  void Trim() { TrimLeft(); TrimRight(); }
-  void TrimLeft() { size_t p = s_.find_first_not_of(" \t\r\n"); s_ = (p == std::string::npos) ? "" : s_.substr(p); }
-  void TrimRight() { size_t p = s_.find_last_not_of(" \t\r\n"); s_ = (p == std::string::npos) ? "" : s_.substr(0, p + 1); }
-  void TrimLeft(const char* set) { size_t p = s_.find_first_not_of(set); s_ = (p == std::string::npos) ? "" : s_.substr(p); }
-  void TrimRight(const char* set) { size_t p = s_.find_last_not_of(set); s_ = (p == std::string::npos) ? "" : s_.substr(0, p + 1); }
+  // case + trim — MFC returns CString& (mutate in place, allow chaining/assignment)
+  CString& MakeLower() { for (auto& c : s_) c = (char)tolower((unsigned char)c); return *this; }
+  CString& MakeUpper() { for (auto& c : s_) c = (char)toupper((unsigned char)c); return *this; }
+  CString& Trim() { TrimLeft(); TrimRight(); return *this; }
+  CString& TrimLeft() { size_t p = s_.find_first_not_of(" \t\r\n"); s_ = (p == std::string::npos) ? "" : s_.substr(p); return *this; }
+  CString& TrimRight() { size_t p = s_.find_last_not_of(" \t\r\n"); s_ = (p == std::string::npos) ? "" : s_.substr(0, p + 1); return *this; }
+  CString& TrimLeft(const char* set) { size_t p = s_.find_first_not_of(set); s_ = (p == std::string::npos) ? "" : s_.substr(p); return *this; }
+  CString& TrimRight(const char* set) { size_t p = s_.find_last_not_of(set); s_ = (p == std::string::npos) ? "" : s_.substr(0, p + 1); return *this; }
+  CString& TrimLeft(char c) { char set[2] = {c, 0}; return TrimLeft(set); }
+  CString& TrimRight(char c) { char set[2] = {c, 0}; return TrimRight(set); }
+  // Remove all occurrences of a char; returns count removed (MFC semantics)
+  int Remove(char c) { int n = 0; std::string o; for (char ch : s_) { if (ch == c) n++; else o += ch; } s_ = o; return n; }
+  void Truncate(int n) { if (n >= 0 && n < (int)s_.size()) s_.resize(n); }
+  void Append(const char* p) { if (p) s_ += p; }
+  void Append(const CString& o) { s_ += o.s_; }
+  void AppendChar(char c) { s_ += c; }
 
   int Replace(const char* from, const char* to) {
     int n = 0; size_t p = 0; size_t flen = strlen(from);

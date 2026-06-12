@@ -33,6 +33,20 @@ daemon (backed up at `/var/www/hiss-linux.bak-*`).
 Per-file syntax check: `g++ -std=c++17 -fsyntax-only -w -I compat -I engine/oh <f>`.
 Bulk harness: `/tmp/bulk.sh` → writes `PASS=/FAIL=` and `/tmp/failed_files.txt`.
 
+## STATUS: engine compiles 147/147 ✅
+All engine `.cpp` files pass `g++ -std=c++17 -fpermissive -fsyntax-only` against
+the `compat/` shim. The shim now covers the full MFC/Win32/GDI surface the engine
+touches (CString/CArray/CMap, CWnd/CDC/CDialog + GDI object classes, the Win32
+constant/typedef/function universe, libpq + PokerTracker + OpenCV/Tesseract stubs).
+Key reconstructed pieces: `Preferences.h` (real class, found in-tree), synthesized
+`prw1326.h`, `CSymbolEngineFormulaLoading.h`, PT-DLL stub. A few MSVC-isms were
+patched in-source (HashKey/CompareElements `template<>`, const-ref params, a dead
+`(COpenHoldemDoc*)` cast, an unused `using namespace std`, the lowercase
+`preferences` → `Preferences()`).
+
+Next: **link** the objects (compile to .o, resolve undefined symbols with stubs),
+then wire poker-eval, bridge the API input, build the daemon + HTTP service.
+
 ## Remaining (the grind) — in leverage order
 1. Keep growing the shim from the **top-error tally** (each common error unblocks
    a wave). Last high-leverage items resolved: `CRITICAL_SECTION`,

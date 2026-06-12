@@ -27,6 +27,8 @@ class CArray {
   void InsertAt(int i, ARG_TYPE x, int count = 1) { if (i < 0) i = 0; v_.insert(v_.begin() + std::min(i, (int)v_.size()), count, x); }
   void Append(const CArray& o) { v_.insert(v_.end(), o.v_.begin(), o.v_.end()); }
   void Copy(const CArray& o) { v_ = o.v_; }
+  TYPE* GetData() { return v_.empty() ? nullptr : v_.data(); }
+  const TYPE* GetData() const { return v_.empty() ? nullptr : v_.data(); }
 
  private:
   std::vector<TYPE> v_;

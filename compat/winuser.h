@@ -1,4 +1,4 @@
-#ifndef HISS_STUB_winuser
-#define HISS_STUB_winuser
+#ifndef HISS_STUB_winuser_h
+#define HISS_STUB_winuser_h
 #include "mfc_compat.h"
 #endif
