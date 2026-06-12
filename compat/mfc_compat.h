@@ -1183,7 +1183,10 @@ inline int    GetClassNameA(HWND, char* buf, int n) { if (buf && n) buf[0] = 0; 
 #define VERSION_NUMBER 1
 #endif
 
-// minimal BSD-socket surface (ChatTerminalServer — networking is inert here)
+// minimal BSD-socket surface (ChatTerminalServer — networking is inert here).
+// winhttp_curl.cpp (which uses real sockets via libcurl) opts out with
+// HISS_NO_SOCKET_STUBS to avoid clashing with the system <sys/socket.h>.
+#ifndef HISS_NO_SOCKET_STUBS
 typedef uintptr_t SOCKET_T;
 struct in_addr_stub { unsigned long s_addr; };
 struct sockaddr_stub { unsigned short sa_family; char sa_data[14]; };
@@ -1205,6 +1208,7 @@ inline unsigned short htons(unsigned short x) { return (unsigned short)((x << 8)
 inline unsigned long  inet_addr(const char*) { return 0; }
 inline int  setsockopt(SOCKET, int, int, const char*, int) { return 0; }
 inline int  ioctlsocket(SOCKET, long, unsigned long*) { return 0; }
+#endif  // HISS_NO_SOCKET_STUBS
 
 // global window helpers (engine calls the ::-qualified Win32 forms)
 inline BOOL GetWindowRect(HWND, RECT* r) { if (r) { r->left = r->top = r->right = r->bottom = 0; } return 1; }
@@ -1222,9 +1226,11 @@ inline HRESULT SHCreateDirectoryExA(HWND, const char*, void*) { return 0; }
 #endif
 
 inline DWORD WaitForMultipleObjects(DWORD, const HANDLE*, BOOL, DWORD) { return 0; }
+#ifndef HISS_NO_SOCKET_STUBS
 inline unsigned long  htonl(unsigned long x) { return ((x & 0xff) << 24) | ((x & 0xff00) << 8) | ((x >> 8) & 0xff00) | ((x >> 24) & 0xff); }
 inline unsigned long  ntohl(unsigned long x) { return htonl(x); }
 inline unsigned short ntohs(unsigned short x) { return htons(x); }
+#endif
 inline BOOL CloseWindow(HWND) { return 1; }
 inline BOOL MoveWindow(HWND, int, int, int, int, BOOL = 1) { return 1; }
 inline BOOL IsChild(HWND, HWND) { return 0; }

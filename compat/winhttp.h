@@ -1,8 +1,10 @@
-// winhttp.h — WinHTTP API surface for the Linux port.
+// winhttp.h — WinHTTP API surface for the Linux port, backed by libcurl.
 //
-// Currently INERT stubs so CScarletBeast links. The next step is to back these
-// with libcurl (a WinHTTP-on-curl translation layer) so the Scarlet Beast API
-// client actually fetches table state — CScarletBeast.cpp then needs no changes.
+// CScarletBeast.cpp drives the classic WinHTTP sequence (Open -> Connect ->
+// OpenRequest -> SendRequest -> ReceiveResponse -> QueryHeaders(status) ->
+// QueryDataAvailable/ReadData). These declarations are implemented in
+// compat/winhttp_curl.cpp on top of libcurl, so the client fetches for real
+// without any change to CScarletBeast.cpp. Link with -lcurl.
 #ifndef HISS_WINHTTP_H
 #define HISS_WINHTTP_H
 #include "mfc_compat.h"
@@ -30,18 +32,19 @@ typedef unsigned short INTERNET_PORT;
 #define WINHTTP_QUERY_STATUS_CODE 19
 #define WINHTTP_ADDREQ_FLAG_ADD 0x20000000
 
-inline HINTERNET WinHttpOpen(LPCWSTR, DWORD, LPCWSTR, LPCWSTR, DWORD) { return nullptr; }
-inline HINTERNET WinHttpConnect(HINTERNET, LPCWSTR, INTERNET_PORT, DWORD) { return nullptr; }
-inline HINTERNET WinHttpOpenRequest(HINTERNET, LPCWSTR, LPCWSTR, LPCWSTR, LPCWSTR, LPCWSTR*, DWORD) { return nullptr; }
-inline BOOL WinHttpSendRequest(HINTERNET, LPCWSTR, DWORD, void*, DWORD, DWORD, uintptr_t) { return 0; }
-inline BOOL WinHttpReceiveResponse(HINTERNET, void*) { return 0; }
-inline BOOL WinHttpQueryHeaders(HINTERNET, DWORD, LPCWSTR, void*, DWORD*, DWORD*) { return 0; }
-inline BOOL WinHttpQueryDataAvailable(HINTERNET, DWORD*) { return 0; }
-inline BOOL WinHttpReadData(HINTERNET, void*, DWORD, DWORD*) { return 0; }
-inline BOOL WinHttpAddRequestHeaders(HINTERNET, LPCWSTR, DWORD, DWORD) { return 1; }
-inline BOOL WinHttpCloseHandle(HINTERNET) { return 1; }
+// Implemented over libcurl in compat/winhttp_curl.cpp.
+HINTERNET WinHttpOpen(LPCWSTR user_agent, DWORD, LPCWSTR, LPCWSTR, DWORD);
+HINTERNET WinHttpConnect(HINTERNET session, LPCWSTR host, INTERNET_PORT port, DWORD);
+HINTERNET WinHttpOpenRequest(HINTERNET connect, LPCWSTR method, LPCWSTR path, LPCWSTR, LPCWSTR, LPCWSTR*, DWORD flags);
+BOOL WinHttpSendRequest(HINTERNET request, LPCWSTR headers, DWORD headers_len, void* body, DWORD body_len, DWORD total_len, uintptr_t);
+BOOL WinHttpReceiveResponse(HINTERNET request, void*);
+BOOL WinHttpQueryHeaders(HINTERNET request, DWORD flags, LPCWSTR, void* out, DWORD* out_len, DWORD*);
+BOOL WinHttpQueryDataAvailable(HINTERNET request, DWORD* available);
+BOOL WinHttpReadData(HINTERNET request, void* buf, DWORD buf_len, DWORD* read);
+BOOL WinHttpAddRequestHeaders(HINTERNET request, LPCWSTR, DWORD, DWORD);
+BOOL WinHttpCloseHandle(HINTERNET);
 
-// wide<->narrow + wide CRT helpers the client uses
+// wide<->narrow + wide CRT helpers the client uses (header-inline; trivial)
 inline int MultiByteToWideChar(UINT, DWORD, const char* s, int, wchar_t* out, int n) {
   int i = 0; if (s) { for (; s[i] && (n == 0 || i < n - 1); i++) if (out) out[i] = (wchar_t)(unsigned char)s[i]; }
   if (out && n) out[i] = 0; return i + 1;

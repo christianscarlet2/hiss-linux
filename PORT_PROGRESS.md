@@ -91,10 +91,13 @@ What was needed to link (197 -> 0 unresolved):
 - Fixed two real upstream bugs: a duplicate `CSymbolEngineVersusmod.cpp` and a
   copy-paste stray global in `CSymbolengineUserDLL.cpp`.
 
+## API client is LIVE ✅
+`compat/winhttp.h` + `compat/winhttp_curl.cpp` implement the WinHTTP API on
+**libcurl** — CScarletBeast.cpp fetches table state for real, unchanged. Verified
+end-to-end against poker.scarletbeast.com (HTTP 200, live lobby JSON). Build links
+`-lcurl`; `build.sh` is 6-way parallel (~45s clean).
+
 ## Remaining to a FUNCTIONAL server
-1. **Make the API client live**: back `compat/winhttp.h` with libcurl (a
-   WinHTTP-on-curl layer) so CScarletBeast actually fetches table state — no
-   engine-source changes needed.
 2. **Real entrypoint**: replace the trivial `main()` with the play-loop daemon +
    the HTTP decision service; initialise the memory pool + engine container +
    load a formula on startup.
