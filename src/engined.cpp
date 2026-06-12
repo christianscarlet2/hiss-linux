@@ -12,6 +12,11 @@
 #include "COpenHoldemStatusbar.h"
 #include "globals.h"
 #include "MagicNumbers.h"
+#include "CardFunctions.h"
+#include "CTableState.h"
+#include "CPlayer.h"
+#include <string>
+#include <cstdlib>
 #include <cstdio>
 
 extern "C" void hiss_boot() {
@@ -27,10 +32,84 @@ extern "C" void hiss_boot() {
 
 // One evaluation pass over the current table state -> JSON autoplayer surface.
 // Returns a pointer to a static buffer (single-threaded server).
-bool g_table_state_ready = false;  // set true by the (forthcoming) table-state bridge
 
-extern "C" const char* hiss_decide() {
+// ------------------------------------------------- minimal JSON field readers
+// Good enough for the flat seat-view schema we accept (no nested-escape edge
+// cases in our own payloads). Returns "" / default when the key is absent.
+static std::string JStr(const std::string& s, const std::string& key) {
+  std::string needle = "\"" + key + "\"";
+  size_t p = s.find(needle); if (p == std::string::npos) return "";
+  p = s.find(':', p + needle.size()); if (p == std::string::npos) return "";
+  ++p; while (p < s.size() && (s[p]==' '||s[p]=='\t'||s[p]=='\n')) ++p;
+  if (p < s.size() && s[p]=='"') { size_t q = s.find('"', ++p); return s.substr(p, q==std::string::npos?0:q-p); }
+  return "";
+}
+static double JNum(const std::string& s, const std::string& key, double dflt) {
+  std::string needle = "\"" + key + "\"";
+  size_t p = s.find(needle); if (p == std::string::npos) return dflt;
+  p = s.find(':', p + needle.size()); if (p == std::string::npos) return dflt;
+  ++p; while (p < s.size() && (s[p]==' '||s[p]=='\t')) ++p;
+  size_t start = p; if (p<s.size() && (s[p]=='-'||s[p]=='+')) ++p;
+  bool any=false; while (p<s.size() && ((s[p]>='0'&&s[p]<='9')||s[p]=='.')) { ++p; any=true; }
+  return any ? atof(s.substr(start, p-start).c_str()) : dflt;
+}
+
+// Set a Card from a 2-char string like "As" (no-op on empty/"??").
+static void SetCard(Card* c, const std::string& cs) {
+  if (!c) return;
+  if (cs.size() < 2 || cs[0]=='?') { c->ClearValue(); return; }
+  char tmp[3] = { cs[0], cs[1], 0 };
+  c->SetValue(CardStringToCardNumber(tmp));
+}
+
+// Populate CTableState from a seat-view JSON body. Schema (all optional):
+//   { "hole":"AsKh", "board":"Qd7c2s", "userchair":2, "dealer":0,
+//     "nchairs":6, "occupied":"111111", "active":"101101",
+//     "stack":50.0, "bet":0.0 }
+// 'occupied'/'active' are per-seat bit strings (char '1' = yes), left->right by
+// chair. The user's hole cards go on 'userchair' (that is how the engine derives
+// who the hero is). Returns true if enough state to evaluate.
+static bool PopulateTableState(const std::string& body) {
+  if (!p_table_state) return false;
+  p_table_state->Reset();
+
+  int nchairs   = (int)JNum(body, "nchairs", 6);
+  int userchair = (int)JNum(body, "userchair", 0);
+  int dealer    = (int)JNum(body, "dealer", -1);
+  double stack  = JNum(body, "stack", 100.0);
+  double bet    = JNum(body, "bet", 0.0);
+  std::string hole = JStr(body, "hole"), board = JStr(body, "board");
+  std::string occ = JStr(body, "occupied"), act = JStr(body, "active");
+
+  for (int i = 0; i < nchairs; ++i) {
+    bool seated = occ.empty() ? true : (i < (int)occ.size() && occ[i] == '1');
+    bool active = act.empty() ? seated : (i < (int)act.size() && act[i] == '1');
+    CPlayer* pl = p_table_state->Player(i);
+    pl->set_seated(seated);
+    pl->set_active(active);
+    pl->set_dealer(i == dealer);
+    pl->_balance.SetValue(stack);
+    pl->_bet.SetValue((i == userchair) ? bet : 0.0);
+  }
+  // Hero hole cards -> the engine reads userchair off whoever holds known cards.
+  if (hole.size() >= 4 && userchair >= 0 && userchair < nchairs) {
+    p_table_state->Player(userchair)->hole_cards(0)->SetValue(CardStringToCardNumber((char*)hole.substr(0,2).c_str()));
+    p_table_state->Player(userchair)->hole_cards(1)->SetValue(CardStringToCardNumber((char*)hole.substr(2,2).c_str()));
+  }
+  // Board / community cards.
+  for (size_t j = 0; j*2 + 1 < board.size() && j < 5; ++j)
+    SetCard(p_table_state->CommonCards((int)j), board.substr(j*2, 2));
+  return true;
+}
+
+bool g_table_state_ready = false;
+
+extern "C" const char* hiss_decide(const char* body_c) {
   static char buf[640];
+  std::string body = body_c ? body_c : "";
+  if (!body.empty() && body.find('{') != std::string::npos) {
+    g_table_state_ready = PopulateTableState(body);
+  }
   // EvaluateAll() over EMPTY table state dereferences scraper-populated data
   // (e.g. nopponents-1 indexing) — so only run it once the bridge has filled
   // CTableState. Until then report the engine's default decision surface.

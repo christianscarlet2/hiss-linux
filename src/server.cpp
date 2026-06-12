@@ -12,7 +12,7 @@
 #include <arpa/inet.h>
 
 extern "C" void hiss_boot();
-extern "C" const char* hiss_decide();
+extern "C" const char* hiss_decide(const char* body);
 
 static void Send(int fd, const char* status, const char* body) {
   char hdr[256];
@@ -47,8 +47,10 @@ int main(int argc, char** argv) {
     std::sscanf(req, "%7s %255s", method, path);
     if (std::strcmp(path, "/health") == 0)
       Send(fd, "200 OK", "{\"status\":\"ok\",\"engine\":\"booted\",\"service\":\"hiss-linux\"}");
-    else if (std::strncmp(path, "/decide", 7) == 0)
-      Send(fd, "200 OK", hiss_decide());
+    else if (std::strncmp(path, "/decide", 7) == 0) {
+      const char* body = std::strstr(req, "\r\n\r\n");
+      Send(fd, "200 OK", hiss_decide(body ? body + 4 : ""));
+    }
     else
       Send(fd, "404 Not Found", "{\"error\":\"not found\"}");
     ::close(fd);
