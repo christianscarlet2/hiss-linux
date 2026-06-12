@@ -13,6 +13,30 @@
 #include <map>
 #include <mutex>
 #include <iostream>
+#include <cstdint>
+
+// ---- poker-eval integer typedefs ----
+typedef uint8_t  uint8;
+typedef uint16_t uint16;
+typedef uint32_t uint32;
+typedef uint64_t uint64;
+typedef int8_t   sint8;
+typedef int16_t  sint16;
+typedef int32_t  sint32;
+typedef int64_t  sint64;
+
+// ---- MSVC keywords + OpenHoldem DLL export macros → no-ops on Linux ----
+#define __declspec(x)
+#define __forceinline inline
+#define WINAPI
+#define CALLBACK
+#define GLOBALS_DLL_API
+#define PREFERENCES_DLL_API
+#define DEBUG_DLL_API
+#define FILES_DLL_API
+#define VALIDATOR_DLL_API
+#define WINDOWFUNCTIONS_DLL_API
+#define STRINGFUNCTIONS_DLL_API
 
 #include "mfc_string.h"
 #include "mfc_collections.h"
@@ -108,6 +132,10 @@ class CFile {
 };
 
 // ---- MFC object/serialization/runtime machinery (mostly inert on Linux) ----
+
+class CWinThread { public: virtual ~CWinThread() {} virtual BOOL InitInstance() { return 1; } };
+inline CWinThread* AfxBeginThread(void*, void*) { return nullptr; }
+
 class CObject {
  public:
   virtual ~CObject() {}
@@ -121,6 +149,8 @@ class CArchive {
   CArchive& operator<<(const CString&) { return *this; }
   CArchive& operator>>(int&) { return *this; }
   CArchive& operator>>(CString&) { return *this; }
+  BOOL ReadString(CString&) { return FALSE; }
+  void WriteString(const char*) {}
 };
 struct CRuntimeClass { const char* m_lpszClassName; };
 class CException : public CObject {
@@ -184,10 +214,43 @@ inline long RegSetValueExA(HKEY, const char*, DWORD, DWORD, const BYTE*, DWORD) 
 inline long RegCloseKey(HKEY) { return 0; }
 inline long RegCreateKeyExA(HKEY, const char*, DWORD, char*, DWORD, DWORD, void*, HKEY*, DWORD*) { return 1; }
 
+// ---- GDI colour + misc Win32 types/macros/functions ----
+typedef DWORD COLORREF;
+#define RGB(r, g, b) ((COLORREF)(((BYTE)(r)) | (((BYTE)(g)) << 8) | (((BYTE)(b)) << 16)))
+#define GetRValue(c) ((BYTE)(c))
+#define GetGValue(c) ((BYTE)(((c) >> 8) & 0xff))
+#define GetBValue(c) ((BYTE)(((c) >> 16) & 0xff))
+#ifndef WM_USER
+#define WM_USER 0x0400
+#define WM_APP 0x8000
+#endif
+typedef uintptr_t SOCKET;
+typedef long LRESULT;
+typedef UINT_PTR WPARAM;
+typedef intptr_t LPARAM;
+typedef WORD ATOM;
+inline long InterlockedExchange(long volatile* t, long v) { long o = *t; *t = v; return o; }
+inline long InterlockedIncrement(long volatile* t) { return ++(*t); }
+inline long InterlockedDecrement(long volatile* t) { return --(*t); }
+inline long InterlockedCompareExchange(long volatile* t, long e, long c) { long o = *t; if (o == c) *t = e; return o; }
+
 // ---- Win32 helpers occasionally called by engine utility code ----
 inline DWORD GetTickCount() { return 0; }
 inline void  Sleep(DWORD) {}
 inline DWORD GetCurrentThreadId() { return 0; }
 inline DWORD GetLastError() { return 0; }
+
+
+// ---- misc small bits ----
+#ifndef _TRUNCATE
+#define _TRUNCATE ((size_t)-1)
+#endif
+typedef CArray<BYTE, BYTE> CByteArray_base;
+class CByteArray : public CArray<BYTE, BYTE> {};
+typedef CArray<DWORD, DWORD> CDWordArray;
+inline int strcpy_s(char* d, size_t n, const char* s) { strncpy(d, s, n); d[n?n-1:0]=0; return 0; }
+inline int strncpy_s(char* d, size_t n, const char* s, size_t) { strncpy(d, s, n); d[n?n-1:0]=0; return 0; }
+inline int sprintf_s(char* d, size_t n, const char* fmt, ...) { va_list a; va_start(a,fmt); int r=vsnprintf(d,n,fmt,a); va_end(a); return r; }
+inline int vsprintf_s(char* d, size_t n, const char* fmt, va_list a) { return vsnprintf(d,n,fmt,a); }
 
 #endif  // HISS_COMPAT_MFC_COMPAT_H

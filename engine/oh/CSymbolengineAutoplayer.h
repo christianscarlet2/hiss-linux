@@ -1,0 +1,1 @@
+CSymbolEngineAutoplayer.h
