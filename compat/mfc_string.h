@@ -40,6 +40,9 @@ class CString {
   CString& operator=(const CString& o) { s_ = o.s_; return *this; }
   CString& operator=(const char* s) { s_ = s ? s : ""; return *this; }
   CString& operator=(char c) { s_ = std::string(1, c); return *this; }
+  CString& operator=(int v) { if (v == 0) s_.clear(); else s_ = std::string(1, (char)v); return *this; }  // handles `= NULL`
+  CString& operator=(long v) { if (v == 0) s_.clear(); return *this; }
+  CString& operator=(std::nullptr_t) { s_.clear(); return *this; }
 
   // implicit conversions used throughout the engine
   operator const char*() const { return s_.c_str(); }

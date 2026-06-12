@@ -38,7 +38,7 @@ class CCasinoInterface: public CSpaceOptimizedGlobalObject {
 	bool UseSliderForAllin();
 	bool UseSliderForBetsize(double betsize, double betsize_for_allin);
 	bool CloseWindow();
-	bool EnterChatMessage(CString &message);
+	bool EnterChatMessage(const CString& message);
 	int  NumberOfVisibleAutoplayerButtons();
   bool IsMyTurn();
   void PressTabToSwitchOHReplayToNextFrame();

@@ -1,3 +1,4 @@
-#ifndef HISS_STUB2_psapi
-#define HISS_STUB2_psapi
+#ifndef HISS_STUB_PSAPI2
+#define HISS_STUB_PSAPI2
+#include "mfc_compat.h"
 #endif

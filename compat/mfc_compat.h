@@ -20,6 +20,7 @@
 // Win32 provides global min/max; the engine calls them unqualified.
 using std::min;
 using std::max;
+using std::to_string;
 
 // ---- poker-eval integer typedefs ----
 typedef uint8_t  uint8;
@@ -56,6 +57,9 @@ namespace tesseract { class TessBaseAPI { public: TessBaseAPI() {} }; }
 
 #ifndef BETPOT_DEFAULT
 #define BETPOT_DEFAULT 0
+#define BETPOT_RAISE 1
+#define BETPOT_CALL 2
+#define BETPOT_POT 3
 #endif
 
 #include "mfc_string.h"
@@ -74,6 +78,8 @@ typedef int64_t         __int64;
 typedef uint64_t        ULONGLONG;
 typedef intptr_t        INT_PTR;
 typedef uintptr_t       UINT_PTR;
+typedef uintptr_t       DWORD_PTR;
+typedef intptr_t        LONG_PTR;
 typedef long            LRESULT;   // (also typedef'd later; identical)
 typedef UINT_PTR        WPARAM;
 typedef intptr_t        LPARAM;
@@ -89,6 +95,8 @@ typedef intptr_t        LPARAM;
 
 struct POINT { long x, y; };
 struct RECT  { long left, top, right, bottom; };
+struct SIZE  { long cx, cy; };
+typedef SIZE* LPSIZE;
 struct LOGFONT;  // fully defined later; CFont::CreateFontIndirect needs only the pointer
 // MFC geometry helpers (defined early so GUI classes can return them by value)
 struct CPoint : public POINT { CPoint(long X=0,long Y=0){x=X;y=Y;} };
@@ -126,6 +134,7 @@ class CCriticalSection {
 };
 class CMutex {
  public:
+  HANDLE m_hObject = (HANDLE)1;
   CMutex(BOOL = 0, const char* = nullptr, void* = nullptr) {}
   BOOL Lock(DWORD = 0) { m_.lock(); return 1; }
   BOOL Unlock() { m_.unlock(); return 1; }
@@ -187,7 +196,7 @@ inline CWinThread* AfxBeginThread(void*, void*, int = 0, UINT = 0, DWORD = 0, vo
 // forward decls so CWnd's accessors can name these (full defs follow below)
 class CDataExchange; class CDC; class CFont; class CPen; class CBrush; class CBitmap; class CGdiObject;
 class CFrameWnd;
-struct MSG; struct CREATESTRUCT;
+struct MSG; struct CREATESTRUCT; struct CRuntimeClass;
 class CCmdTarget { public: virtual ~CCmdTarget() {} };
 class CWinApp : public CWinThread {
  public:
@@ -269,11 +278,12 @@ class CWnd : public CCmdTarget {
   void   MoveWindow(int, int, int, int, BOOL = 1) {}
 };
 class CDialog : public CWnd { public: CDialog(unsigned = 0, CWnd* = nullptr) {} CDialog(const char*, CWnd* = nullptr) {} virtual BOOL OnInitDialog() { return 1; } virtual void OnOK() {} virtual void OnCancel() {} virtual void DoDataExchange(CDataExchange*) {} int DoModal() { return 0; } BOOL Create(unsigned, CWnd* = nullptr) { return 1; } BOOL Create(const char*, CWnd* = nullptr) { return 1; } };
-class CFrameWnd : public CWnd { public: BOOL m_bHelpMode = 0; CWnd* GetActiveView() const { return nullptr; } };
+class CFrameWnd : public CWnd { public: BOOL m_bHelpMode = 0; CWnd* GetActiveView() const { return nullptr; } void EnableDocking(DWORD) {} void DockControlBar(CWnd*, UINT = 0, RECT* = nullptr) {} void FloatControlBar(CWnd*, POINT, DWORD = 0) {} void RecalcLayout(BOOL = 1) {} void ShowControlBar(CWnd*, BOOL, BOOL) {} };
 class CDocument : public CCmdTarget {};
 class CView : public CWnd { public: CDocument* m_pDocument = nullptr; CDocument* GetDocument() const { return m_pDocument; } virtual void OnInitialUpdate() {} virtual void OnDraw(CDC*) {} virtual void OnUpdate(CView*, intptr_t, void*) {} };
 class CStatic : public CWnd {};
-class CToolBar : public CWnd { public: BOOL Create(CWnd*, DWORD = 0, UINT = 0) { return 1; } BOOL CreateEx(CWnd*, DWORD = 0, DWORD = 0) { return 1; } };
+class CToolBarCtrl { public: BOOL SetButtonInfo(int, void*) { return 1; } int GetButtonCount() { return 0; } BOOL CheckButton(int, BOOL = 1) { return 1; } BOOL EnableButton(int, BOOL = 1) { return 1; } BOOL IsButtonChecked(int) { return 0; } BOOL IsButtonEnabled(int) { return 1; } };
+class CToolBar : public CWnd { public: BOOL Create(CWnd*, DWORD = 0, UINT = 0) { return 1; } BOOL CreateEx(CWnd*, DWORD = 0, DWORD = 0) { return 1; } CToolBarCtrl& GetToolBarCtrl() { static CToolBarCtrl c; return c; } operator void*() { return this; } BOOL LoadToolBar(UINT) { return 1; } BOOL LoadToolBar(const char*) { return 1; } void EnableDocking(DWORD) {} void SetBarStyle(DWORD) {} DWORD GetBarStyle() { return 0; } BOOL SetButtons(const UINT*, int) { return 1; } void SetSizes(SIZE, SIZE) {} };
 class CButton : public CWnd {};
 class CEdit : public CWnd {};
 class CComboBox : public CWnd {};
@@ -349,6 +359,8 @@ class CDataExchange { public: CWnd* m_pDlgWnd = nullptr; };
 class CObject {
  public:
   virtual ~CObject() {}
+  virtual CRuntimeClass* GetRuntimeClass() const { return nullptr; }
+  BOOL IsKindOf(const CRuntimeClass*) const { return 1; }
 };
 class CArchive {
  public:
@@ -371,7 +383,7 @@ class CException : public CObject {
   virtual BOOL GetErrorMessage(char* buf, UINT n, UINT* = nullptr) { if (buf && n) buf[0] = 0; return FALSE; }
   void Delete() {}
 };
-class CFileException : public CException { public: int m_cause = 0; };
+class CFileException : public CException { public: int m_cause = 0; long m_lOsError = 0; CString m_strFileName; static int OsErrorToException(long) { return 0; } };
 class CMemoryException : public CException {};
 class CFileFind {
  public:
@@ -515,7 +527,7 @@ inline BOOL CloseHandle(HANDLE) { return 1; }
 typedef int (*mouse_process_message_t)(void*, void*, void*);
 typedef int (*keyboard_process_message_t)(void*, void*, void*);
 typedef int (*process_message_t)(void*, void*, void*);
-typedef int (*mouse_click_t)(void*, int, int, int);
+typedef int (*mouse_click_t)(void*, RECT, int, int);
 typedef int (*keyboard_click_t)(void*, int, int, int);
 
 // ---- more Win32 odds & ends the engine references ----
@@ -540,6 +552,10 @@ class CCmdUI { public: void Enable(BOOL=1){} void SetCheck(int=1){} void SetText
 #define MB_ICONQUESTION 0
 #define MB_ICONSTOP 0
 #define MB_SYSTEMMODAL 0
+#define MB_TOPMOST 0x40000
+#define MB_SETFOREGROUND 0x10000
+#define MB_TASKMODAL 0x2000
+#define MB_APPLMODAL 0
 #define IDOK 1
 #define IDCANCEL 2
 #define IDYES 6
@@ -593,6 +609,8 @@ struct STableList {
   HWND  hwnd = nullptr;
   CString title;
   int   x = 0, y = 0, width = 0, height = 0;
+  int   tablemap_index = 0;
+  CString name;
 };
 
 // ---- CRT functions MSVC spells differently ----
@@ -609,6 +627,8 @@ inline int _access(const char* p, int m) { return access(p, m); }
 #endif
 
 // ---- Win32 kernel/user API stubs (inert; subsystems are stripped) ----
+inline HANDLE CreateSemaphore(void*, long, long, const char*) { return nullptr; }
+inline BOOL ReleaseSemaphore(HANDLE, long, long*) { return 1; }
 inline HANDLE CreateEvent(void*, BOOL, BOOL, const char*) { return nullptr; }
 inline HANDLE CreateMutex(void*, BOOL, const char*) { return nullptr; }
 inline HANDLE CreateThread(void*, size_t, void*, void*, DWORD, DWORD*) { return nullptr; }
@@ -656,6 +676,21 @@ inline DWORD  GetSysColor(int) { return 0; }
 #define COLOR_INFOTEXT 23
 #define COLOR_INFOBK 24
 // extended window styles + clip flags
+#define WS_EX_DLGMODALFRAME 0x1
+#define WS_EX_WINDOWEDGE 0x100
+#define WS_EX_APPWINDOW 0x40000
+#define WS_OVERLAPPED 0
+#define WS_OVERLAPPEDWINDOW 0xcf0000
+#define WS_MINIMIZEBOX 0x20000
+#define WS_MAXIMIZEBOX 0x10000
+#define WS_THICKFRAME 0x40000
+#define WS_DLGFRAME 0x400000
+#define WS_VSCROLL 0x200000
+#define WS_HSCROLL 0x100000
+#define ES_AUTOVSCROLL 0x40
+#define ES_LEFT 0
+#define ES_NOHIDESEL 0x100
+#define ES_WANTRETURN 0x1000
 #define WS_CLIPCHILDREN 0x02000000
 #define WS_CLIPSIBLINGS 0x04000000
 #define WS_POPUP 0x80000000
@@ -796,8 +831,8 @@ class CImageList : public CObject {};
 
 // mouse/keyboard autoplayer extra typedefs
 typedef int (*mouse_clickdrag_t)(void*, int, int, int, int);
-typedef int (*keyboard_sendstring_t)(void*, const char*);
-typedef int (*keyboard_sendkey_t)(void*, int);
+typedef int (*keyboard_sendstring_t)(void*, RECT, const char*, bool);
+typedef int (*keyboard_sendkey_t)(void*, RECT, int);
 
 // HRESULT + COM-ish bits (WindowCapture etc.)
 typedef long HRESULT;
@@ -857,6 +892,8 @@ inline int _sopen_s(int* fh, const char* path, int oflag, int /*shflag*/, int /*
 
 // ---- more Win32 handle/typedefs ----
 typedef void* HMODULE;
+typedef void* HGLOBAL;
+typedef void* HLOCAL;
 typedef void* PVOID;
 typedef void* HMONITOR;
 typedef void* HHOOK;
@@ -872,6 +909,11 @@ typedef unsigned char  UCHAR;
 struct WSADATA { WORD wVersion; WORD wHighVersion; char szDescription[257]; char szSystemStatus[129]; unsigned short iMaxSockets, iMaxUdpDg; char* lpVendorInfo; };
 inline int WSAStartup(WORD, WSADATA*) { return 0; }
 inline int WSACleanup() { return 0; }
+#define LOWORD(l) ((WORD)(((DWORD_PTR)(l)) & 0xffff))
+#define HIWORD(l) ((WORD)((((DWORD_PTR)(l)) >> 16) & 0xffff))
+#define LOBYTE(w) ((BYTE)(((DWORD_PTR)(w)) & 0xff))
+#define HIBYTE(w) ((BYTE)((((DWORD_PTR)(w)) >> 8) & 0xff))
+#define MAKELONG(a, b) ((LONG)(((WORD)(a)) | (((DWORD)((WORD)(b))) << 16)))
 #define MAKEWORD(a, b) ((WORD)(((BYTE)(a)) | (((WORD)((BYTE)(b))) << 8)))
 
 // crypto error codes (MD5_Checksum)
@@ -1007,6 +1049,9 @@ inline void* GlobalFree(void* p) { std::free(p); return nullptr; }
 // window messages
 #ifndef WM_KEYDOWN
 #define WM_KEYDOWN 0x0100
+#define WM_SIZE 0x0005
+#define WM_MOVE 0x0003
+#define WM_ACTIVATE 0x0006
 #define WM_KEYUP 0x0101
 #define WM_CHAR 0x0102
 #define WM_LBUTTONDOWN 0x0201
@@ -1025,8 +1070,15 @@ inline void* GlobalFree(void* p) { std::free(p); return nullptr; }
 #define LPSTR_TEXTCALLBACK ((char*)-1L)
 #define LPSTR_TEXTCALLBACKA ((char*)-1L)
 inline const char* AfxRegisterWndClass(UINT, HCURSOR = nullptr, HBRUSH = nullptr, HICON = nullptr) { return "HissWndClass"; }
+inline HINSTANCE AfxGetInstanceHandle() { return nullptr; }
 inline BOOL AfxGetResourceHandle() { return 0; }
 inline LRESULT DefWindowProcA(HWND, UINT, WPARAM, LPARAM) { return 0; }
+inline LRESULT DefWindowProc(HWND, UINT, WPARAM, LPARAM) { return 0; }
+inline BOOL DestroyWindow(HWND) { return 1; }
+inline HWND CreateWindowExA(DWORD,const char*,const char*,DWORD,int,int,int,int,HWND,HMENU,HINSTANCE,void*){return nullptr;}
+#define CreateWindowEx CreateWindowExA
+inline ATOM RegisterClassExA(const void*){return 0;}
+#define RegisterClassEx RegisterClassExA
 inline LRESULT CallWindowProcA(void*, HWND, UINT, WPARAM, LPARAM) { return 0; }
 inline LRESULT CallWindowProc(void*, HWND, UINT, WPARAM, LPARAM) { return 0; }
 // low-level CRT IO
@@ -1267,6 +1319,173 @@ inline HANDLE CreateFileA(const char*, DWORD, DWORD, void*, DWORD, DWORD, HANDLE
 #define CreateFile CreateFileA
 inline BOOL ReadFile(HANDLE, void*, DWORD, DWORD*, void*) { return 0; }
 inline BOOL WriteFile(HANDLE, const void*, DWORD, DWORD*, void*) { return 0; }
+#ifndef _MAX_PATH
+#define _MAX_PATH 4096
+#define _MAX_DRIVE 8
+#define _MAX_DIR 4096
+#define _MAX_FNAME 1024
+#define _MAX_EXT 1024
+#endif
+// file-find (Win32) — inert; engine also uses CFileFind
+struct WIN32_FIND_DATAA { DWORD dwFileAttributes; DWORD ftCreationTime[2], ftLastAccessTime[2], ftLastWriteTime[2]; DWORD nFileSizeHigh, nFileSizeLow, dwReserved0, dwReserved1; char cFileName[260]; char cAlternateFileName[14]; };
+typedef WIN32_FIND_DATAA WIN32_FIND_DATA;
+inline HANDLE FindFirstFileA(const char*, WIN32_FIND_DATAA*) { return INVALID_HANDLE_VALUE; }
+inline HANDLE FindFirstFile(const char*, WIN32_FIND_DATAA*) { return INVALID_HANDLE_VALUE; }
+inline BOOL FindNextFileA(HANDLE, WIN32_FIND_DATAA*) { return 0; }
+inline BOOL FindNextFile(HANDLE, WIN32_FIND_DATAA*) { return 0; }
+inline BOOL FindClose(HANDLE) { return 1; }
+inline char* ctime_s(char* buf, size_t /*n*/, const time_t* t) { if (buf) ctime_r(t, buf); return buf; }
+// global window APIs the window-functions lib calls (inert headless)
+inline BOOL ShowWindow(HWND, int) { return 1; }
+inline HWND GetDesktopWindow() { return nullptr; }
+inline HWND FindWindowA(const char*, const char*) { return nullptr; }
+#define FindWindow FindWindowA
+inline BOOL IsIconic(HWND) { return 0; }
+inline BOOL IsZoomed(HWND) { return 0; }
+inline BOOL SetCurrentDirectoryA(const char*) { return 1; }
+#define SetCurrentDirectory SetCurrentDirectoryA
+inline DWORD GetCurrentDirectoryA(DWORD, char* buf) { if (buf) buf[0] = 0; return 0; }
+#define GetCurrentDirectory GetCurrentDirectoryA
+inline HANDLE GetProcessHeap() { return nullptr; }
+inline void* HeapAlloc(HANDLE, DWORD, size_t n) { return std::calloc(1, n); }
+inline void* HeapReAlloc(HANDLE, DWORD, void* p, size_t n) { return std::realloc(p, n); }
+inline BOOL HeapFree(HANDLE, DWORD, void* p) { std::free(p); return 1; }
+#define HEAP_ZERO_MEMORY 0x8
+inline HGDIOBJ GetCurrentObject(HDC, UINT) { return nullptr; }
+#define OBJ_BITMAP 7
+#define OBJ_PEN 1
+#define OBJ_BRUSH 2
+#define OBJ_FONT 6
+inline HWND GetDlgItem(HWND, int) { return nullptr; }
+inline COLORREF GetPixel(HDC, int, int) { return 0; }
+inline COLORREF SetPixel(HDC, int, int, COLORREF) { return 0; }
+inline HWND GetActiveWindow() { return nullptr; }
+inline BOOL OpenClipboard(HWND) { return 1; }
+inline BOOL EmptyClipboard() { return 1; }
+inline BOOL CloseClipboard() { return 1; }
+inline HANDLE SetClipboardData(UINT, HANDLE) { return nullptr; }
+inline HANDLE GetClipboardData(UINT) { return nullptr; }
+inline void* GlobalLock(HANDLE) { return nullptr; }
+inline BOOL GlobalUnlock(HANDLE) { return 1; }
+inline HANDLE GlobalAllocHandle(UINT, size_t n) { return std::calloc(1, n); }
+#define CF_TEXT 1
+#define GMEM_MOVEABLE 0x2
+#define GMEM_DDESHARE 0x2000
+typedef LRESULT (*WNDPROC)(HWND, UINT, WPARAM, LPARAM);
+struct WNDCLASSA { UINT style; WNDPROC lpfnWndProc; int cbClsExtra, cbWndExtra; HINSTANCE hInstance; HICON hIcon; HCURSOR hCursor; HBRUSH hbrBackground; const char* lpszMenuName; const char* lpszClassName; };
+typedef WNDCLASSA WNDCLASS;
+inline ATOM RegisterClassA(const WNDCLASSA*) { return 1; }
+#define RegisterClass RegisterClassA
+inline BOOL UnregisterClassA(const char*, HINSTANCE) { return 1; }
+#define UnregisterClass UnregisterClassA
+inline HCURSOR LoadCursorA(HINSTANCE, const char*) { return nullptr; }
+#define LoadCursor LoadCursorA
+inline HICON LoadIconA(HINSTANCE, const char*) { return nullptr; }
+#define LoadIcon LoadIconA
+#define IDC_ARROW ((const char*)32512)
+#define IDI_APPLICATION ((const char*)32512)
+inline BOOL EnableWindow(HWND, BOOL) { return 1; }
+inline BOOL SetForegroundWindow(HWND) { return 1; }
+#define KL_NAMELENGTH 9
+#define DEFAULT_GUI_FONT 17
+#define SYSTEM_FONT 13
+#define ANSI_VAR_FONT 12
+#define NULL_BRUSH 5
+#define WHITE_BRUSH 0
+#define EM_SETSEL 0x00B1
+#define EM_REPLACESEL 0x00C2
+#define EM_GETSEL 0x00B0
+inline BOOL GetMessageA(MSG*, HWND, UINT, UINT) { return 0; }
+#define GetMessage GetMessageA
+inline BOOL TranslateMessage(const MSG*) { return 1; }
+inline LRESULT DispatchMessageA(const MSG*) { return 0; }
+#define DispatchMessage DispatchMessageA
+inline BOOL IsDialogMessageA(HWND, MSG*) { return 0; }
+#define IsDialogMessage IsDialogMessageA
+inline BOOL PeekMessageA(MSG*, HWND, UINT, UINT, UINT) { return 0; }
+#define PeekMessage PeekMessageA
+inline BOOL UpdateWindow(HWND) { return 1; }
+inline int GetSystemMetrics(int) { return 0; }
+inline BOOL GetCursorPos(POINT* p) { if (p) { p->x = p->y = 0; } return 1; }
+inline BOOL SetCursorPos(int, int) { return 1; }
+inline void mouse_event(DWORD, DWORD, DWORD, DWORD, UINT_PTR) {}
+inline void keybd_event(BYTE, BYTE, DWORD, UINT_PTR) {}
+#define KEY_QUERY_VALUE 0x1
+#define KEY_SET_VALUE 0x2
+#define KEY_ALL_ACCESS 0xF003F
+#define KEY_ENUMERATE_SUB_KEYS 0x8
+#define WAIT_FOR_CONDITION(x) while (!(x)) { Sleep(50); }
+enum MouseButton { MouseLeft = 0, MouseRight = 1, MouseMiddle = 2 };
+inline BOOL Beep(DWORD, DWORD) { return 1; }
+#define RegOpenKeyEx RegOpenKeyExA
+#define RegQueryValueEx RegQueryValueExA
+#define RegSetValueEx RegSetValueExA
+#define RegCreateKeyEx RegCreateKeyExA
+#define PLANES 14
+#define BITSPIXEL 12
+#define HORZRES 8
+#define VERTRES 10
+inline bool IsChatAllowed() { return false; }
+#define ID_FILE_NEW 0xE100
+#define ID_FILE_OPEN 0xE101
+#define ID_FILE_SAVE 0xE103
+#define ID_FILE_SAVE_AS 0xE104
+#define ID_APP_ABOUT 0xE140
+#define ID_APP_EXIT 0xE141
+#define ID_EDIT_COPY 0xE122
+#define ID_EDIT_CUT 0xE123
+#define ID_EDIT_PASTE 0xE125
+#define ID_VIEW_TOOLBAR 0xE800
+#define ID_VIEW_STATUS_BAR 0xE801
+#define ID_SEPARATOR 0
+inline void RegisterChatMessage(...) {}
+inline LRESULT SendMessageTimeoutA(HWND, UINT, WPARAM, LPARAM, UINT, UINT, DWORD_PTR*) { return 0; }
+#define SendMessageTimeout SendMessageTimeoutA
+#define SMTO_NOTIMEOUTIFNOTHUNG 0x8
+#define SMTO_ABORTIFHUNG 0x2
+#define SMTO_BLOCK 0x1
+inline int GetKeyboardLayoutName(char* buf) { if (buf) buf[0]=0; return 1; }
+#define GetKeyboardLayoutNameA GetKeyboardLayoutName
+#define _tcscmp strcmp
+#define _tcsicmp strcasecmp
+#define _tcscpy strcpy
+#define _tcslen strlen
+#define _tcscat strcat
+#define _tcsstr strstr
+#define _tcschr strchr
+#define _stprintf_s snprintf
+#define _vstprintf_s vsnprintf
+struct TBBUTTONINFOA { UINT cbSize; DWORD dwMask; int idCommand; int iImage; BYTE fsState, fsStyle; WORD cx; UINT_PTR lParam; char* pszText; int cchText; };
+typedef TBBUTTONINFOA TBBUTTONINFO;
+struct TBBUTTON { int iBitmap; int idCommand; BYTE fsState, fsStyle; UINT_PTR dwData; INT_PTR iString; };
+#define TBIF_TEXT 0x2
+#define TBIF_STATE 0x4
+#define TBIF_STYLE 0x8
+#define TBIF_IMAGE 0x1
+#define TBSTATE_ENABLED 0x4
+#define TBSTATE_CHECKED 0x1
+#define TBSTYLE_CHECK 0x2
+#define TBSTYLE_BUTTON 0x0
+#define TBSTYLE_SEP 0x1
+#define CBRS_TOP 0x1
+#define CBRS_BOTTOM 0x2
+#define CBRS_LEFT 0x4
+#define CBRS_RIGHT 0x8
+#define CBRS_ALIGN_TOP CBRS_TOP
+#define CBRS_TOOLTIPS 0x10
+#define CBRS_FLYBY 0x20
+#define CBRS_SIZE_DYNAMIC 0x40
+#define CBRS_GRIPPER 0x400000
+inline DWORD GetPrivateProfileStringA(const char*, const char*, const char* def, char* buf, DWORD n, const char*) { if (buf && n) { std::strncpy(buf, def?def:"", n); buf[n-1]=0; return (DWORD)std::strlen(buf); } return 0; }
+#define GetPrivateProfileString GetPrivateProfileStringA
+inline UINT GetPrivateProfileIntA(const char*, const char*, int def, const char*) { return def; }
+#define GetPrivateProfileInt GetPrivateProfileIntA
+inline BOOL WritePrivateProfileStringA(const char*, const char*, const char*, const char*) { return 1; }
+#define WritePrivateProfileString WritePrivateProfileStringA
+inline HWND GetShellWindow() { return nullptr; }
+inline DWORD GetProcessImageFileNameA(HANDLE, char* buf, DWORD) { if (buf) buf[0] = 0; return 0; }
+#define GetProcessImageFileName GetProcessImageFileNameA
+inline FILE* _fsopen(const char* path, const char* mode, int) { return std::fopen(path, mode); }
 inline DWORD GetModuleFileNameA(HMODULE, char* buf, DWORD n) { if (buf && n) buf[0] = 0; return 0; }
 #define GetModuleFileName GetModuleFileNameA
 #define CAPTUREBLT 0x40000000
