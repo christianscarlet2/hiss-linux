@@ -76,6 +76,10 @@ typedef void*           HBITMAP;
 typedef void*           HDC;
 typedef int64_t         __int64;
 typedef uint64_t        ULONGLONG;
+class CWinApp;
+typedef void*           HCURSOR;
+typedef void*           HICON;
+typedef void*           HMENU_EARLY;
 typedef intptr_t        INT_PTR;
 typedef uintptr_t       UINT_PTR;
 typedef uintptr_t       DWORD_PTR;
@@ -120,8 +124,9 @@ inline int AfxMessageBox(const CString& msg, unsigned = 0, unsigned = 0) {
 #ifndef VERIFY
 #define VERIFY(x) ((void)(x))
 #endif
+extern CWinApp* AfxGetAppPtr();
 #ifndef AfxGetApp
-#define AfxGetApp() (nullptr)
+#define AfxGetApp() (AfxGetAppPtr())
 #endif
 
 // ---- threading: MFC sync primitives → std ----
@@ -208,6 +213,11 @@ class CWinApp : public CWinThread {
   class CWnd* m_pMainWnd = nullptr;
   HINSTANCE m_hInstance = nullptr;
   const char* m_lpCmdLine = "";
+  HCURSOR LoadStandardCursor(const char*) { return nullptr; }
+  HICON LoadStandardIcon(const char*) { return nullptr; }
+  HCURSOR LoadCursor(const char*) { return nullptr; }
+  HICON LoadIcon(const char*) { return nullptr; }
+  int DoMessageBox(const char*, UINT, UINT) { return 0; }
 };
 class CWnd : public CCmdTarget {
  public:
@@ -273,6 +283,9 @@ class CWnd : public CCmdTarget {
   BOOL  EnableWindow(BOOL = 1) { return 1; }
   void  CenterWindow(CWnd* = nullptr) {}
   BOOL  UpdateData(BOOL = 1) { return 1; }
+  BOOL  CreateEx(DWORD, const char*, const char*, DWORD, int, int, int, int, HWND, void*, void* = nullptr) { return 1; }
+  BOOL  CreateEx(DWORD, const char*, const char*, DWORD, const RECT&, CWnd*, UINT, void* = nullptr) { return 1; }
+  BOOL  Create(const char*, const char*, DWORD, const RECT&, CWnd*, UINT, void* = nullptr) { return 1; }
   HWND   GetSafeHwnd_() const { return m_hWnd; }
   void   MoveWindow(const RECT*, BOOL = 1) {}
   void   MoveWindow(int, int, int, int, BOOL = 1) {}
@@ -281,7 +294,7 @@ class CDialog : public CWnd { public: CDialog(unsigned = 0, CWnd* = nullptr) {} 
 class CFrameWnd : public CWnd { public: BOOL m_bHelpMode = 0; CWnd* GetActiveView() const { return nullptr; } void EnableDocking(DWORD) {} void DockControlBar(CWnd*, UINT = 0, RECT* = nullptr) {} void FloatControlBar(CWnd*, POINT, DWORD = 0) {} void RecalcLayout(BOOL = 1) {} void ShowControlBar(CWnd*, BOOL, BOOL) {} };
 class CDocument : public CCmdTarget {};
 class CView : public CWnd { public: CDocument* m_pDocument = nullptr; CDocument* GetDocument() const { return m_pDocument; } virtual void OnInitialUpdate() {} virtual void OnDraw(CDC*) {} virtual void OnUpdate(CView*, intptr_t, void*) {} };
-class CStatic : public CWnd {};
+class CStatic : public CWnd { public: BOOL Create(const char*, DWORD, const RECT&, CWnd*, UINT = 0) { return 1; } void SetWindowText(const char*) {} };
 class CToolBarCtrl { public: BOOL SetButtonInfo(int, void*) { return 1; } int GetButtonCount() { return 0; } BOOL CheckButton(int, BOOL = 1) { return 1; } BOOL EnableButton(int, BOOL = 1) { return 1; } BOOL IsButtonChecked(int) { return 0; } BOOL IsButtonEnabled(int) { return 1; } };
 class CToolBar : public CWnd { public: BOOL Create(CWnd*, DWORD = 0, UINT = 0) { return 1; } BOOL CreateEx(CWnd*, DWORD = 0, DWORD = 0) { return 1; } CToolBarCtrl& GetToolBarCtrl() { static CToolBarCtrl c; return c; } operator void*() { return this; } BOOL LoadToolBar(UINT) { return 1; } BOOL LoadToolBar(const char*) { return 1; } void EnableDocking(DWORD) {} void SetBarStyle(DWORD) {} DWORD GetBarStyle() { return 0; } BOOL SetButtons(const UINT*, int) { return 1; } void SetSizes(SIZE, SIZE) {} };
 class CButton : public CWnd {};
@@ -632,9 +645,9 @@ inline BOOL ReleaseSemaphore(HANDLE, long, long*) { return 1; }
 inline HANDLE CreateEvent(void*, BOOL, BOOL, const char*) { return nullptr; }
 inline HANDLE CreateMutex(void*, BOOL, const char*) { return nullptr; }
 inline HANDLE CreateThread(void*, size_t, void*, void*, DWORD, DWORD*) { return nullptr; }
-// CreateProcess: inert macro (callers pass MSVC-lax args like `false` for NULL)
-#define CreateProcess(...) (0)
-#define CreateProcessA(...) (0)
+// CreateProcess: inert variadic stubs (callers pass MSVC-lax args like `false` for NULL)
+inline BOOL CreateProcessA(const char*, char*, ...) { return 0; }
+inline BOOL CreateProcess(const char*, char*, ...) { return 0; }
 inline BOOL   SetEvent(HANDLE) { return 1; }
 inline BOOL   ResetEvent(HANDLE) { return 1; }
 inline DWORD  WaitForSingleObject(HANDLE, DWORD) { return 0; }
@@ -812,6 +825,22 @@ class CImageList : public CObject {};
 #define ON_WM_ERASEBKGND()
 #define ON_WM_TIMER()
 #define ON_WM_SIZE()
+#define ON_WM_MOVING()
+#define ON_WM_MOVE()
+#define ON_WM_SIZING()
+#define ON_WM_ACTIVATE()
+#define ON_WM_SHOWWINDOW()
+#define ON_WM_NCPAINT()
+#define ON_WM_GETMINMAXINFO()
+#define ON_WM_WINDOWPOSCHANGED()
+#define ON_WM_WINDOWPOSCHANGING()
+#define ON_WM_SYSCOMMAND()
+#define ON_WM_DRAWITEM()
+#define ON_WM_MEASUREITEM()
+#define ON_WM_INITMENUPOPUP()
+#define ON_WM_MENUSELECT()
+#define ON_WM_QUERYDRAGICON()
+#define ON_WM_HELPINFO()
 #define ON_WM_KEYDOWN()
 #define ON_WM_CHAR()
 #define ON_WM_SETFOCUS()
@@ -820,17 +849,31 @@ class CImageList : public CObject {};
 #define ON_WM_VSCROLL()
 #define ON_WM_CTLCOLOR()
 #define ON_WM_LBUTTONDOWN()
+#define ON_WM_LBUTTONUP()
+#define ON_WM_RBUTTONUP()
+#define ON_WM_MBUTTONDOWN()
+#define ON_WM_LBUTTONDBLCLK()
+#define ON_WM_MOUSEWHEEL()
+#define ON_WM_VKEYTOITEM()
+#define ON_WM_NCHITTEST()
 #define ON_WM_RBUTTONDOWN()
 #define ON_WM_MOUSEMOVE()
 #define ON_WM_CONTEXTMENU()
 #define ON_BN_CLICKED(a, b)
+#define ON_EN_KILLFOCUS(a, b)
+#define ON_EN_SETFOCUS(a, b)
+#define ON_EN_CHANGE(a, b)
+#define ON_EN_UPDATE(a, b)
+#define ON_BN_DOUBLECLICKED(a, b)
+#define ON_LBN_SELCHANGE(a, b)
+#define ON_LBN_DBLCLK(a, b)
 #define ON_UPDATE_COMMAND_UI(a, b)
 #define ON_NOTIFY(a, b, c)
 #define ON_CBN_SELCHANGE(a, b)
 #endif
 
 // mouse/keyboard autoplayer extra typedefs
-typedef int (*mouse_clickdrag_t)(void*, int, int, int, int);
+typedef int (*mouse_clickdrag_t)(void*, RECT, int);
 typedef int (*keyboard_sendstring_t)(void*, RECT, const char*, bool);
 typedef int (*keyboard_sendkey_t)(void*, RECT, int);
 
@@ -957,6 +1000,7 @@ typedef COPYDATASTRUCT* PCOPYDATASTRUCT;
 #ifndef SW_SHOWNORMAL
 #define SW_HIDE 0
 #define SW_SHOWNORMAL 1
+#define CW_USEDEFAULT ((int)0x80000000)
 #define SW_SHOW 5
 #define SW_MINIMIZE 6
 #define SW_RESTORE 9
@@ -1121,6 +1165,17 @@ inline int    GetClassNameA(HWND, char* buf, int n) { if (buf && n) buf[0] = 0; 
 #define VK_TAB 0x09
 #define VK_SPACE 0x20
 #define VK_F1 0x70
+#define VK_F2 0x71
+#define VK_F3 0x72
+#define VK_F4 0x73
+#define VK_F5 0x74
+#define VK_F6 0x75
+#define VK_F7 0x76
+#define VK_F8 0x77
+#define VK_F9 0x78
+#define VK_F10 0x79
+#define VK_F11 0x7A
+#define VK_F12 0x7B
 #endif
 
 // version symbol
@@ -1482,6 +1537,30 @@ inline UINT GetPrivateProfileIntA(const char*, const char*, int def, const char*
 #define GetPrivateProfileInt GetPrivateProfileIntA
 inline BOOL WritePrivateProfileStringA(const char*, const char*, const char*, const char*) { return 1; }
 #define WritePrivateProfileString WritePrivateProfileStringA
+inline BOOL EqualRect(const RECT* a, const RECT* b) { return a&&b&&a->left==b->left&&a->top==b->top&&a->right==b->right&&a->bottom==b->bottom; }
+inline HWND SetActiveWindow(HWND) { return nullptr; }
+#define VK_CONTROL 0x11
+#define VK_SHIFT 0x10
+#define VK_MENU 0x12
+#define VK_LWIN 0x5B
+#define VK_BACK 0x08
+#define VK_DELETE 0x2E
+#define VK_LEFT 0x25
+#define VK_RIGHT 0x27
+#define VK_UP 0x26
+#define VK_DOWN 0x28
+#define VK_HOME 0x24
+#define VK_END 0x23
+inline short VkKeyScanA(char) { return 0; }
+#define VkKeyScan VkKeyScanA
+inline UINT MapVirtualKeyA(UINT, UINT) { return 0; }
+#define MapVirtualKey MapVirtualKeyA
+inline short GetKeyState(int) { return 0; }
+inline short GetAsyncKeyState(int) { return 0; }
+inline long RegOpenKeyExW(HKEY, const wchar_t*, DWORD, DWORD, HKEY*) { return 1; }
+inline long RegQueryValueExW(HKEY, const wchar_t*, DWORD*, DWORD*, BYTE*, DWORD*) { return 1; }
+inline long RegCreateKeyExW(HKEY, const wchar_t*, DWORD, wchar_t*, DWORD, DWORD, void*, HKEY*, DWORD*) { return 1; }
+inline long RegSetValueExW(HKEY, const wchar_t*, DWORD, DWORD, const BYTE*, DWORD) { return 1; }
 inline HWND GetShellWindow() { return nullptr; }
 inline DWORD GetProcessImageFileNameA(HANDLE, char* buf, DWORD) { if (buf) buf[0] = 0; return 0; }
 #define GetProcessImageFileName GetProcessImageFileNameA

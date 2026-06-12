@@ -71,3 +71,31 @@ then wire poker-eval, bridge the API input, build the daemon + HTTP service.
 - Total ~204 source files; ~12 compile clean so far. The remaining are layered
   errors — fix the common root, re-measure, repeat.
 - The original Windows code at `c:\www\openholdembot_old` is **untouched**.
+
+## MILESTONE: the engine LINKS + runs on Linux ✅ (`./build.sh` -> `build/hiss`)
+The full engine now **compiles (147/147), links into a 5.1 MB ELF, and starts
+cleanly** (exit 0). Reproducible via `./build.sh` (poker-eval -> support libs ->
+engine/subsystems -> link).
+
+What was needed to link (197 -> 0 unresolved):
+- **poker-eval**: pulled `pokereval/*.c` from Windows, built `libpokereval.a`.
+- **support libs**: Files, string_functions, debug, globals, window_functions,
+  MessageBoxes, Preferences (real `CPreferences`), lookup3 (hashword).
+- **CTablemap/CTransform** + ~15 subsystem classes compiled against the shim.
+- **headless_stubs.cpp**: the scraper / OCR / autoplayer-widget / chat / MFC
+  doc+frame / user-DLL layer — REPLACED by the API feed — stubbed inert. The
+  scraper/OCR singletons are NULL (never invoked headless).
+- **CScarletBeast** (real 461-line API client) compiles against a `winhttp.h`
+  shim; **CSymbolEngineScarletBeast** (sb_connected/sb_pot/sb_to_call/sb_to_act/
+  sb_my_seat/sb_table_id) compiles.
+- Fixed two real upstream bugs: a duplicate `CSymbolEngineVersusmod.cpp` and a
+  copy-paste stray global in `CSymbolengineUserDLL.cpp`.
+
+## Remaining to a FUNCTIONAL server
+1. **Make the API client live**: back `compat/winhttp.h` with libcurl (a
+   WinHTTP-on-curl layer) so CScarletBeast actually fetches table state — no
+   engine-source changes needed.
+2. **Real entrypoint**: replace the trivial `main()` with the play-loop daemon +
+   the HTTP decision service; initialise the memory pool + engine container +
+   load a formula on startup.
+3. Bundle a default OpenPPL formula in `strategy/` + config to load one.

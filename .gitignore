@@ -1,3 +1,4 @@
 *.o
 /build
 engine/_stripped
+build/

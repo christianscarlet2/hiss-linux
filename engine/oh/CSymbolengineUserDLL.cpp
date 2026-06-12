@@ -27,7 +27,7 @@
 #include "CTableState.h"
 #include "user.h"
 
-CSymbolEngineUserDLL *p_symbol_engine_formula_loading = NULL;
+// [removed stray duplicate global — real singleton is CEngineContainer::p_symbol_engine_user_DLL]
 
 CSymbolEngineUserDLL::CSymbolEngineUserDLL() {
 	// The values of some symbol-engines depend on other engines.
