@@ -79,8 +79,10 @@ void CSymbolEnginePrwin::UpdateOnNewRound() {
 }
 
 void CSymbolEnginePrwin::UpdateOnMyTurn() {
-  if (StartOfPrWinComputationsNeeded()) {
-    assert(p_iterator_thread != NULL);
+  // Headless: the Monte-Carlo iterator thread is GUI/threads-init only and is
+  // never created here, so guard it. CalculateNOpponents() below still runs and
+  // sets nopponents (handrank etc. depend on it); prwin/prlos stay at defaults.
+  if (StartOfPrWinComputationsNeeded() && p_iterator_thread != NULL) {
     p_iterator_thread->RestartPrWinComputations();
     _known_change_in_gamestate_since_last_prwin_calculation = false;
   }

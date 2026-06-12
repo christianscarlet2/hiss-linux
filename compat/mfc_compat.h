@@ -187,6 +187,16 @@ class CFile {
     size_t p = path_.find_last_of("/\\");
     return CString(p == std::string::npos ? path_.c_str() : path_.c_str() + p + 1);
   }
+  // read one line (without trailing CR/LF); returns FALSE at EOF
+  BOOL ReadString(CString& line) {
+    if (!fp_) return FALSE;
+    std::string s; int c;
+    bool got = false;
+    while ((c = std::fgetc(fp_)) != EOF) { got = true; if (c == '\n') break; if (c != '\r') s += (char)c; }
+    if (!got) return FALSE;
+    line = s.c_str();
+    return TRUE;
+  }
  protected:
   FILE* fp_ = nullptr;
   std::string path_;
@@ -379,16 +389,19 @@ class CArchive {
  public:
   enum Mode { load, store };
   CArchive() {}
-  CArchive(CFile*, UINT, int = 0, void* = nullptr) {}
-  bool IsStoring() const { return false; }
-  bool IsLoading() const { return true; }
+  CArchive(CFile* f, UINT mode, int = 0, void* = nullptr) : file_(f), storing_(mode == store) {}
+  bool IsStoring() const { return storing_; }
+  bool IsLoading() const { return !storing_; }
   CArchive& operator<<(int) { return *this; }
   CArchive& operator<<(const CString&) { return *this; }
   CArchive& operator>>(int&) { return *this; }
   CArchive& operator>>(CString&) { return *this; }
-  BOOL ReadString(CString&) { return FALSE; }
-  void WriteString(const char*) {}
-  CFile* GetFile() const { return nullptr; }
+  BOOL ReadString(CString& line) { return file_ ? file_->ReadString(line) : FALSE; }
+  void WriteString(const char* s) { if (file_ && s) file_->Write(s, (UINT)strlen(s)); }
+  CFile* GetFile() const { return file_; }
+ private:
+  CFile* file_ = nullptr;
+  bool storing_ = false;
 };
 struct CRuntimeClass { const char* m_lpszClassName; };
 class CException : public CObject {

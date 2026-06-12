@@ -102,3 +102,28 @@ end-to-end against poker.scarletbeast.com (HTTP 200, live lobby JSON). Build lin
    the HTTP decision service; initialise the memory pool + engine container +
    load a formula on startup.
 3. Bundle a default OpenPPL formula in `strategy/` + config to load one.
+
+## Table-state bridge: POST /decide -> populated CTableState -> live symbols
+`POST /decide` with a seat-view JSON ({hole, board, userchair, dealer, nchairs,
+occupied, active, stack, bet, bblind}) populates `CTableState` (hero known cards
++ opponents' card-backs, board, per-seat seated/active/dealer/stack, blind bets)
+and runs `EvaluateAll()` + `CalcPrimary/SecondaryFormulas()`. **Verified**: the
+engine computes real symbols from the populate — `userchair`, `nplayersdealt`,
+`betround` (1 preflop / 2 flop / ... tracks the board), `position`. A bundled
+`strategy/default.ohf` is loaded at boot via a now-functional `CArchive`/`CFile`
+(reads lines from disk). Symbols are read via `p_engine_container->EvaluateSymbol`
+(the path the formula uses), exposed in the `"sym"` debug field of /decide.
+
+Engine edits for headless: `CTablemap::set_nchairs` (seat count without a .tm
+file); `CCasinoInterface::IsMyTurn` honours `g_hiss_force_my_turn`; prwin's
+iterator call is null-guarded (the Monte-Carlo `p_iterator_thread` is GUI/threads
+-init only).
+
+### Last mile — the "my turn" heavy-symbol path
+`handrank169` / `prwin` only compute on `UpdateOnMyTurn()`, which spins the
+threaded `CIteratorThread` Monte-Carlo and other GUI/thread-coupled code that
+isn't initialised headless (crashes / garbage symbol names). So my-turn is
+OPT-IN (`HISS_MYTURN=1`); by default the daemon is robust and computes the base
+(non-prwin) symbols. Finishing this means standing up the iterator-thread infra
+(or a synchronous prwin) so hand-strength symbols fire — then a hand-strength
+OpenPPL formula produces full decisions.

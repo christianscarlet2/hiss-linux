@@ -203,6 +203,7 @@ public:
 public:
 	// commonly used strings 
 	inline const int nchairs() { return _nchairs; }
+	inline void set_nchairs(int n) { _nchairs = n; }  // headless: set seat count without a tablemap file
 	inline int LastChair() { return (nchairs() - 1); }
 	const int swagtextmethod() { return GetTMSymbol("betsizeinterpretationmethod", 0); }
 	const int potmethod() { return GetTMSymbol("potmethod", 0); }

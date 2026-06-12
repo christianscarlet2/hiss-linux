@@ -277,6 +277,8 @@ bool CCasinoInterface::UseSliderForBetsize(double betsize, double betsize_for_al
 }
 
 bool CCasinoInterface::IsMyTurn() {
+  extern bool g_hiss_force_my_turn;  // headless decision service: a /decide call IS our turn
+  if (g_hiss_force_my_turn) return true;
   return (NumberOfVisibleAutoplayerButtons() >= k_min_buttons_needed_for_my_turn);
 }
 

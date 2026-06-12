@@ -9,12 +9,14 @@
 #include "CFormulaParser.h"
 #include "CEngineContainer.h"
 #include "CAutoplayerFunctions.h"
+#include "CFunctionCollection.h"
 #include "COpenHoldemStatusbar.h"
 #include "globals.h"
 #include "MagicNumbers.h"
 #include "CardFunctions.h"
 #include "CTableState.h"
 #include "CPlayer.h"
+#include "CTablemap.h"
 #include <string>
 #include <cstdlib>
 #include <cstdio>
@@ -25,6 +27,19 @@ extern "C" void hiss_boot() {
   if (!p_sessioncounter) p_sessioncounter = new CSessionCounter();
   InstantiateAllSingletons();
   if (p_formula_parser) p_formula_parser->ParseDefaultLibraries();
+  // Load the bundled strategy formula (path overridable via HISS_FORMULA).
+  {
+    const char* fp = getenv("HISS_FORMULA");
+    CString path = fp ? fp : "strategy/default.ohf";
+    CFile file;
+    if (p_formula_parser && file.Open(path.GetString(), CFile::modeRead | CFile::typeText)) {
+      CArchive ar(&file, CArchive::load);
+      p_formula_parser->ParseFormulaFileWithUserDefinedBotLogic(ar);
+      std::fprintf(stderr, "[hiss] strategy formula loaded: %s\n", path.GetString());
+    } else {
+      std::fprintf(stderr, "[hiss] no strategy formula (%s) — decisions will be default\n", path.GetString());
+    }
+  }
   if (!p_openholdem_statusbar) p_openholdem_statusbar = new COpenHoldemStatusbar(nullptr);
   if (p_engine_container) p_engine_container->UpdateOnConnection();  // so EvaluateAll() runs
   std::fprintf(stderr, "[hiss] engine booted (pools, table state, symbol engines, formula parser)\n");
@@ -72,6 +87,7 @@ static void SetCard(Card* c, const std::string& cs) {
 static bool PopulateTableState(const std::string& body) {
   if (!p_table_state) return false;
   p_table_state->Reset();
+  if (p_tablemap) p_tablemap->set_nchairs((int)JNum(body, "nchairs", 6));  // many engines loop to nchairs()
 
   int nchairs   = (int)JNum(body, "nchairs", 6);
   int userchair = (int)JNum(body, "userchair", 0);
@@ -81,6 +97,10 @@ static bool PopulateTableState(const std::string& body) {
   std::string hole = JStr(body, "hole"), board = JStr(body, "board");
   std::string occ = JStr(body, "occupied"), act = JStr(body, "active");
 
+  double bb = JNum(body, "bblind", 1.0);
+  double sb = JNum(body, "sblind", bb / 2.0);
+  int sbchair = (int)JNum(body, "sbchair", dealer >= 0 ? (dealer + 1) % nchairs : -1);
+  int bbchair = (int)JNum(body, "bbchair", dealer >= 0 ? (dealer + 2) % nchairs : -1);
   for (int i = 0; i < nchairs; ++i) {
     bool seated = occ.empty() ? true : (i < (int)occ.size() && occ[i] == '1');
     bool active = act.empty() ? seated : (i < (int)act.size() && act[i] == '1');
@@ -89,9 +109,18 @@ static bool PopulateTableState(const std::string& body) {
     pl->set_active(active);
     pl->set_dealer(i == dealer);
     pl->_balance.SetValue(stack);
-    pl->_bet.SetValue((i == userchair) ? bet : 0.0);
+    double pbet = 0.0;
+    if (i == sbchair) pbet = sb; else if (i == bbchair) pbet = bb;
+    if (i == userchair && bet > 0) pbet = bet;
+    pl->_bet.SetValue(pbet);
+    // All seated players are "in the hand": hero gets known cards (below);
+    // everyone else gets card backs so HasAnyCards()/dealt logic includes them.
+    if (seated && i != userchair) {
+      pl->hole_cards(0)->SetValue(CARD_BACK);
+      pl->hole_cards(1)->SetValue(CARD_BACK);
+    }
   }
-  // Hero hole cards -> the engine reads userchair off whoever holds known cards.
+  // Hero hole cards -> the engine reads userchair off whoever holds KNOWN cards.
   if (hole.size() >= 4 && userchair >= 0 && userchair < nchairs) {
     p_table_state->Player(userchair)->hole_cards(0)->SetValue(CardStringToCardNumber((char*)hole.substr(0,2).c_str()));
     p_table_state->Player(userchair)->hole_cards(1)->SetValue(CardStringToCardNumber((char*)hole.substr(2,2).c_str()));
@@ -103,17 +132,25 @@ static bool PopulateTableState(const std::string& body) {
 }
 
 bool g_table_state_ready = false;
+bool g_hiss_force_my_turn = false;  // set true once table state is populated for a decision
 
 extern "C" const char* hiss_decide(const char* body_c) {
   static char buf[640];
   std::string body = body_c ? body_c : "";
   if (!body.empty() && body.find('{') != std::string::npos) {
     g_table_state_ready = PopulateTableState(body);
+    g_hiss_force_my_turn = g_table_state_ready && getenv("HISS_MYTURN");  // heavy prwin/handrank path; opt-in
   }
   // EvaluateAll() over EMPTY table state dereferences scraper-populated data
   // (e.g. nopponents-1 indexing) — so only run it once the bridge has filled
   // CTableState. Until then report the engine's default decision surface.
-  if (g_table_state_ready && p_engine_container) p_engine_container->EvaluateAll();
+  if (g_table_state_ready && p_engine_container) {
+    p_engine_container->EvaluateAll();
+    if (p_autoplayer_functions) {
+      p_autoplayer_functions->CalcPrimaryFormulas();
+      p_autoplayer_functions->CalcSecondaryFormulas();
+    }
+  }
   auto f = [](int code) -> double {
     return p_autoplayer_functions ? p_autoplayer_functions->GetAutoplayerFunctionValue(code) : 0.0;
   };
@@ -124,11 +161,21 @@ extern "C" const char* hiss_decide(const char* body_c) {
   if (allin) action = "allin"; else if (raise) action = "raise";
   else if (call) action = "call"; else if (check) action = "check";
   else if (fold) action = "fold";
+  auto sym = [](const char* n) -> double {
+    double r = 0; if (p_engine_container) p_engine_container->EvaluateSymbol(n, &r, false); return r; };
+  double hr169 = sym("handrank169"), uchair = sym("userchair"),
+         ndealt = sym("nplayersdealt"), bround = sym("betround"), nopp = sym("nopponents");
+  int tm_nchairs = p_tablemap ? p_tablemap->nchairs() : -1;
+  int is_parsing = (p_formula_parser && p_formula_parser->IsParsing()) ? 1 : 0;
+  int rcoc = (p_engine_container) ? 1 : 0;
+  int user_hasany = (p_table_state && p_table_state->Player((int)JNum(std::string("{}"),"x",0)) ) ? 0 : 0;
+  int p2_hasany = (p_table_state && p_table_state->Player(2)->HasAnyCards()) ? 1 : 0;
+  int p2_hasknown = (p_table_state && p_table_state->Player(2)->HasKnownCards()) ? 1 : 0;
   std::snprintf(buf, sizeof(buf),
     "{\"action\":\"%s\",\"table_state\":\"%s\","
-    "\"f$fold\":%g,\"f$check\":%g,\"f$call\":%g,"
-    "\"f$raise\":%g,\"f$betsize\":%g,\"f$allin\":%g}",
+    "\"f$fold\":%g,\"f$check\":%g,\"f$call\":%g,\"f$raise\":%g,\"f$betsize\":%g,\"f$allin\":%g,"
+    "\"sym\":{\"handrank169\":%g,\"userchair\":%g,\"nplayersdealt\":%g,\"betround\":%g,\"nopponents\":%g,\"tm_nchairs\":%d,\"p2_hasanycards\":%d,\"p2_hasknown\":%d,\"is_parsing\":%d}}",
     action, g_table_state_ready ? "populated" : "empty",
-    fold, check, call, raise, betsize, allin);
+    fold, check, call, raise, betsize, allin, hr169, uchair, ndealt, bround, nopp, tm_nchairs, p2_hasany, p2_hasknown, is_parsing);
   return buf;
 }

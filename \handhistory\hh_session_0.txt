@@ -1,0 +1,18 @@
+================================================================
+Hand #?   (approximate, reconstructed from screen-scraping)
+Placeholders: "Seat N"=name unknown, ?=card unknown, ??=amount/board unknown
+Table 6-max | Blinds 0.50/1.00 | Button: unknown
+Seats:
+  Seat 0: Seat 0 (? in chips)
+  Seat 1: Seat 1 (? in chips)
+  Seat 2: Seat 2 (? in chips) -- HERO
+  Seat 3: Seat 3 (? in chips)
+  Seat 4: Seat 4 (? in chips)
+  Seat 5: Seat 5 (? in chips)
+(bet regions missing from tablemap; blinds not observed)
+*** HOLE CARDS ***
+Dealt to Seat 2 [??]
+*** SUMMARY ***
+Total pot 1.50 | Board [??]
+================================================================
+

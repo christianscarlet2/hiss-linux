@@ -1,0 +1,21 @@
+##notes##
+Hiss-Linux default strategy — a minimal hand-strength demo formula.
+handrank169: 1 = best starting-hand-equivalent, 169 = worst.
+
+##f$fold##
+handrank169 > 90
+
+##f$check##
+0
+
+##f$call##
+handrank169 <= 90 && handrank169 > 40
+
+##f$raise##
+handrank169 <= 40
+
+##f$betsize##
+3 * bblind
+
+##f$beep##
+0
